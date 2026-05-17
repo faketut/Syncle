@@ -40,21 +40,18 @@ class GatherViewModel : ViewModel() {
             isAutoFetching = true
             fetchError = null
             try {
-                println("GatherViewModel: Starting auto-fetch with 5s timeout...")
-                val details = withTimeoutOrNull(5000L) {
-                    authRepository.fetchSandboxConnectionDetails()
-                }
+                println("GatherViewModel: Starting auto-fetch (10s timeout)...")
+                val details = authRepository.fetchSandboxConnectionDetails()
                 if (details != null) {
                     url = details.serverUrl
                     token = details.token
                     println("GatherViewModel: Auto-fetch success: $url")
                 } else {
-                    fetchError = "自动获取 Token 超时或无配置。请检查 Sandbox ID 是否有效，或直接点击下方【离线模式】单机预览。"
-                    println("GatherViewModel: Auto-fetch returned null or timed out")
+                    println("GatherViewModel: Auto-fetch returned null (no sandbox id or network timeout)")
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                fetchError = "网络请求异常 (${e.localizedMessage})。请手动输入或使用离线模式。"
+                println("GatherViewModel: Auto-fetch exception: ${e.message}")
             } finally {
                 isAutoFetching = false
             }
@@ -63,7 +60,7 @@ class GatherViewModel : ViewModel() {
 
     fun cancelAutoFetch() {
         isAutoFetching = false
-        fetchError = "已手动跳过自动获取，可直接点击下方【离线模式】单机预览。"
+        fetchError = null
     }
 
     fun connect(context: Context, mapConfig: MapConfig) {

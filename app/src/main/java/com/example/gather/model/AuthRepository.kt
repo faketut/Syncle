@@ -17,8 +17,8 @@ data class ConnectionDetails(
 
 class AuthRepository {
     private val client = OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(5, TimeUnit.SECONDS)
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
         .build()
 
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
@@ -51,12 +51,12 @@ class AuthRepository {
                         token = json.getString("participantToken")
                     )
                 } else {
-                    throw RuntimeException("HTTP ${response.code}: ${response.message}")
+                    null
                 }
             }
         } catch (e: Exception) {
             e.printStackTrace()
-            throw e
+            null
         }
     }
 }
