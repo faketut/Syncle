@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.gather.CollisionEdgeCaseTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-05-17T01:03:27" hostname="DESKTOP-JESRSGV" time="0.003">
+  <properties/>
+  <testcase name="test exact boundary touch" classname="com.example.gather.CollisionEdgeCaseTest" time="0.002"/>
+  <testcase name="test boundary consistency at right and bottom edges" classname="com.example.gather.CollisionEdgeCaseTest" time="0.0"/>
+  <testcase name="test corner collision sliding logic" classname="com.example.gather.CollisionEdgeCaseTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

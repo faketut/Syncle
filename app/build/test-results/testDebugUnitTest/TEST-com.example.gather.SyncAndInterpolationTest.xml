@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.gather.SyncAndInterpolationTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-05-17T01:03:37" hostname="DESKTOP-JESRSGV" time="0.037">
+  <properties/>
+  <testcase name="test out-of-order packet handling" classname="com.example.gather.SyncAndInterpolationTest" time="0.007"/>
+  <testcase name="test lerp tracks moving target smoothly" classname="com.example.gather.SyncAndInterpolationTest" time="0.0"/>
+  <testcase name="test large scale peer performance" classname="com.example.gather.SyncAndInterpolationTest" time="0.028"/>
+  <testcase name="test small distance threshold alignment" classname="com.example.gather.SyncAndInterpolationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

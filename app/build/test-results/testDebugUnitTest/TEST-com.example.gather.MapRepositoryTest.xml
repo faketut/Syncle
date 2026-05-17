@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.example.gather.MapRepositoryTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-05-17T01:03:27" hostname="DESKTOP-JESRSGV" time="0.009">
+  <properties/>
+  <testcase name="test valid json parsing" classname="com.example.gather.MapRepositoryTest" time="0.007"/>
+  <testcase name="test negative dimensions handling" classname="com.example.gather.MapRepositoryTest" time="0.001"/>
+  <testcase name="test optional fields missing" classname="com.example.gather.MapRepositoryTest" time="0.0"/>
+  <testcase name="test required field missing throws exception" classname="com.example.gather.MapRepositoryTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
