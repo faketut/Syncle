@@ -78,12 +78,17 @@ class GatherViewModel : ViewModel() {
         )
 
         viewModelScope.launch {
-            val success = liveKitService?.connect(url, token) ?: false
-            if (success) {
-                startLoops(mapConfig)
-                connectionStatus = ConnectionStatus.CONNECTED
-                println("LiveKit: Connected successfully to $url")
-            } else {
+            try {
+                val success = liveKitService?.connect(url, token) ?: false
+                if (success) {
+                    startLoops(mapConfig)
+                    connectionStatus = ConnectionStatus.CONNECTED
+                    println("LiveKit: Connected successfully to $url")
+                } else {
+                    connectionStatus = ConnectionStatus.ERROR
+                }
+            } catch (e: Throwable) {
+                e.printStackTrace()
                 connectionStatus = ConnectionStatus.ERROR
             }
         }
@@ -97,8 +102,12 @@ class GatherViewModel : ViewModel() {
     private fun startSyncLoop(mapConfig: MapConfig) {
         syncJob = viewModelScope.launch {
             while (isActive) {
-                broadcastPosition()
-                liveKitService?.updateSpatialAudio(remotePeers, avatarState, mapConfig, maxDistance)
+                try {
+                    broadcastPosition()
+                    liveKitService?.updateSpatialAudio(remotePeers, avatarState, mapConfig, maxDistance)
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
                 delay(50)
             }
         }
@@ -107,7 +116,11 @@ class GatherViewModel : ViewModel() {
     private fun startInterpolationLoop() {
         lerpJob = viewModelScope.launch {
             while (isActive) {
-                remotePeers.forEach { it.interpolate(0.2f) }
+                try {
+                    remotePeers.forEach { it.interpolate(0.2f) }
+                } catch (e: Throwable) {
+                    e.printStackTrace()
+                }
                 delay(16)
             }
         }
@@ -164,11 +177,15 @@ class GatherViewModel : ViewModel() {
     }
 
     fun disconnect() {
-        syncJob?.cancel()
-        lerpJob?.cancel()
-        liveKitService?.disconnect()
-        liveKitService = null
-        connectionStatus = ConnectionStatus.DISCONNECTED
+        try {
+            syncJob?.cancel()
+            lerpJob?.cancel()
+            liveKitService?.disconnect()
+            liveKitService = null
+            connectionStatus = ConnectionStatus.DISCONNECTED
+        } catch (e: Throwable) {
+            e.printStackTrace()
+        }
     }
 
     override fun onCleared() {
