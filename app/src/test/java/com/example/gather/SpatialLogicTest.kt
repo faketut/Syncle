@@ -64,7 +64,7 @@ class SpatialLogicTest {
         )
 
         val localAvatar = AvatarState(initialPosition = Offset(50f, 50f)) // In Room 1
-        val roomManager = RoomManager(mockContext, localAvatar, mapConfig)
+        val roomManager = GatherViewModel()
         
         // Peer 1 in same room -> Volume 1.0
         val peer1 = RemotePeer("p1", "Peer 1", Offset(60f, 60f))
@@ -106,7 +106,7 @@ class SpatialLogicTest {
     fun `test distance-based audio attenuation`() {
         val mapConfig = MapConfig("Test", "", emptyList(), emptyList(), emptyList(), CollisionSettings("AABB", true))
         val localAvatar = AvatarState(initialPosition = Offset(0f, 0f))
-        val roomManager = RoomManager(mockContext, localAvatar, mapConfig)
+        val roomManager = GatherViewModel()
         
         val peer = RemotePeer("p1", "Peer 1", Offset(150f, 0f)) // Half of 300f maxDistance
         roomManager.remotePeers.add(peer)

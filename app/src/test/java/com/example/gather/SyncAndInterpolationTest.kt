@@ -44,7 +44,7 @@ class SyncAndInterpolationTest {
     fun `test out-of-order packet handling`() {
         val mapConfig = MapConfig("Test", "", emptyList(), emptyList(), emptyList(), CollisionSettings("AABB", true))
         val localAvatar = AvatarState()
-        val manager = RoomManager(mockContext, localAvatar, mapConfig)
+        val manager = GatherViewModel()
         
         fun createPosJson(x: Float, seq: Long) = JSONObject().apply {
             put("type", "position")
@@ -72,7 +72,7 @@ class SyncAndInterpolationTest {
     fun `test large scale peer performance`() {
         val mapConfig = MapConfig("Test", "", emptyList(), emptyList(), emptyList(), CollisionSettings("AABB", true))
         val localAvatar = AvatarState()
-        val manager = RoomManager(mockContext, localAvatar, mapConfig)
+        val manager = GatherViewModel()
         
         val startTime = System.currentTimeMillis()
         

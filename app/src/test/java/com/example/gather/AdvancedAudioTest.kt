@@ -24,8 +24,8 @@ class AdvancedAudioTest {
         val peerB = RemotePeer("pB", "Peer B", Offset(250f, 50f)) // Room 2
         val peerC = RemotePeer("pC", "Peer C", Offset(150f, 50f)) // Public Area
         
-        val volAB = RoomManager.calculateVolume(avatarA, peerB, mapConfig, maxDistance)
-        val volAC = RoomManager.calculateVolume(avatarA, peerC, mapConfig, maxDistance)
+        val volAB = GatherViewModel.calculateVolume(avatarA, peerB, mapConfig, maxDistance)
+        val volAC = GatherViewModel.calculateVolume(avatarA, peerC, mapConfig, maxDistance)
         
         assertEquals("A should not hear B (different rooms)", 0.0f, volAB, 0f)
         assertEquals("A should not hear C (A in room, C in public)", 0.0f, volAC, 0f)
@@ -60,11 +60,11 @@ class AdvancedAudioTest {
         val peer = RemotePeer("p1", "Peer 1", Offset(99f, 50f)) // Just inside
 
         // Case 1: Local is inside at (98, 50) -> Full volume
-        val volInside = RoomManager.calculateVolume(AvatarState(Offset(98f, 50f)), peer, mapConfig, maxDistance)
+        val volInside = GatherViewModel.calculateVolume(AvatarState(Offset(98f, 50f)), peer, mapConfig, maxDistance)
         assertEquals(1.0f, volInside, 0f)
 
         // Case 2: Local is just outside at (101, 50) -> Muted due to isolation
-        val volOutside = RoomManager.calculateVolume(AvatarState(Offset(101f, 50f)), peer, mapConfig, maxDistance)
+        val volOutside = GatherViewModel.calculateVolume(AvatarState(Offset(101f, 50f)), peer, mapConfig, maxDistance)
         assertEquals(0.0f, volOutside, 0f)
     }
 }

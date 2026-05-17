@@ -3,6 +3,8 @@ package com.example.gather.model
 import android.content.Context
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import io.livekit.android.LiveKit
 import io.livekit.android.RoomOptions
 import io.livekit.android.events.collect
@@ -15,36 +17,53 @@ import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.*
 import org.json.JSONObject
 
-enum class ConnectionStatus {
-    DISCONNECTED, CONNECTING, CONNECTED, ERROR
-}
-
-class RoomManager(
-    val context: Context,
-    val localAvatar: AvatarState,
-    val mapConfig: MapConfig
-) {
+class GatherViewModel : ViewModel() {
+    val avatarState = AvatarState(initialPosition = Offset(100f, 100f))
     val remotePeers = mutableStateListOf<RemotePeer>()
-    
-    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
-    private var syncJob: Job? = null
-    private var lerpJob: Job? = null
-    
-    // LiveKit Room
-    private var room: Room? = null
     
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
 
-    // Spatial Audio Settings
-    private val maxDistance = 300f
+    var offlineMode by mutableStateOf(false)
+    var url by mutableStateOf("")
+    var token by mutableStateOf("")
+    var isAutoFetching by mutableStateOf(false)
+    var startupError by mutableStateOf<String?>(null)
 
-    /**
-     * Connect to a LiveKit room.
-     */
-    fun connect(url: String, token: String) {
+    private var room: Room? = null
+    private var syncJob: Job? = null
+    private var lerpJob: Job? = null
+
+    private val maxDistance = 300f
+    private val authRepository = AuthRepository()
+
+    fun autoFetchSandboxDetails() {
+        if (url.isNotEmpty() || token.isNotEmpty() || isAutoFetching) return
+        viewModelScope.launch {
+            isAutoFetching = true
+            try {
+                println("GatherViewModel: Starting auto-fetch...")
+                val details = authRepository.fetchSandboxConnectionDetails()
+                if (details != null) {
+                    url = details.serverUrl
+                    token = details.token
+                    println("GatherViewModel: Auto-fetch success: $url")
+                } else {
+                    println("GatherViewModel: Auto-fetch returned null (check local.properties)")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                startupError = "Startup Error: ${e.message}"
+            } finally {
+                isAutoFetching = false
+            }
+        }
+    }
+
+    fun connect(context: Context, mapConfig: MapConfig) {
+        if (connectionStatus == ConnectionStatus.CONNECTING || connectionStatus == ConnectionStatus.CONNECTED) return
         connectionStatus = ConnectionStatus.CONNECTING
-        scope.launch {
+        viewModelScope.launch {
             try {
                 val currentRoom = LiveKit.create(
                     appContext = context.applicationContext,
@@ -56,13 +75,13 @@ class RoomManager(
                 room = currentRoom
 
                 setupRoomListener(currentRoom)
-                
+
                 currentRoom.connect(
                     url = url,
                     token = token
                 )
 
-                startLoops()
+                startLoops(mapConfig)
                 connectionStatus = ConnectionStatus.CONNECTED
                 println("LiveKit: Connected successfully to $url")
             } catch (e: Exception) {
@@ -73,7 +92,7 @@ class RoomManager(
     }
 
     private fun setupRoomListener(currentRoom: Room) {
-        scope.launch {
+        viewModelScope.launch {
             currentRoom.events.collect { event ->
                 when (event) {
                     is io.livekit.android.events.RoomEvent.DataReceived -> {
@@ -97,30 +116,23 @@ class RoomManager(
         }
     }
 
-    private fun startLoops() {
-        startSyncLoop()
+    private fun startLoops(mapConfig: MapConfig) {
+        startSyncLoop(mapConfig)
         startInterpolationLoop()
     }
 
-    fun stop() {
-        syncJob?.cancel()
-        lerpJob?.cancel()
-        room?.disconnect()
-        connectionStatus = ConnectionStatus.DISCONNECTED
-    }
-
-    private fun startSyncLoop() {
-        syncJob = scope.launch {
+    private fun startSyncLoop(mapConfig: MapConfig) {
+        syncJob = viewModelScope.launch {
             while (isActive) {
                 broadcastPosition()
-                updateSpatialAudio()
-                delay(50) 
+                updateSpatialAudio(mapConfig)
+                delay(50)
             }
         }
     }
 
     private fun startInterpolationLoop() {
-        lerpJob = scope.launch {
+        lerpJob = viewModelScope.launch {
             while (isActive) {
                 remotePeers.forEach { it.interpolate(0.2f) }
                 delay(16)
@@ -128,11 +140,10 @@ class RoomManager(
         }
     }
 
-    private fun updateSpatialAudio() {
+    private fun updateSpatialAudio(mapConfig: MapConfig) {
         val currentRoom = room ?: return
         remotePeers.forEach { peer ->
-            val volume = calculateVolume(localAvatar, peer, mapConfig, maxDistance)
-            // Apply volume to LiveKit participant
+            val volume = calculateVolume(avatarState, peer, mapConfig, maxDistance)
             val participant = currentRoom.remoteParticipants.values.find { it.identity?.value == peer.id }
             participant?.let { p ->
                 // Note: Track volume setting implementation
@@ -144,12 +155,12 @@ class RoomManager(
         val currentRoom = room ?: return
         val positionData = JSONObject().apply {
             put("type", "position")
-            put("x", localAvatar.position.x)
-            put("y", localAvatar.position.y)
+            put("x", avatarState.position.x)
+            put("y", avatarState.position.y)
             put("seq", System.currentTimeMillis())
         }
-        
-        scope.launch {
+
+        viewModelScope.launch {
             currentRoom.localParticipant.publishData(
                 data = positionData.toString().toByteArray(),
                 reliability = DataPublishReliability.LOSSY
@@ -194,6 +205,18 @@ class RoomManager(
             newPeer.videoTrack = track
             remotePeers.add(newPeer)
         }
+    }
+
+    fun disconnect() {
+        syncJob?.cancel()
+        lerpJob?.cancel()
+        room?.disconnect()
+        connectionStatus = ConnectionStatus.DISCONNECTED
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        disconnect()
     }
 
     companion object {
