@@ -24,14 +24,20 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        val defaultMapConfig = MapConfig(
-            mapName = "Office Blueprint",
-            backgroundImage = "room1.png",
-            walkableAreas = listOf(Rect(0f, 0f, 2000f, 2000f)),
-            tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f))),
-            privateAreas = listOf(PrivateArea("meeting_room", Rect(600f, 100f, 900f, 400f))),
-            collisionSettings = CollisionSettings("AABB", true)
-        )
+        val mapConfig = try {
+            val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
+            MapRepository().parseJsonConfig(jsonString)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            MapConfig(
+                mapName = "Office Blueprint (Fallback)",
+                backgroundImage = "room1.png",
+                walkableAreas = listOf(Rect(0f, 0f, 2000f, 2000f)),
+                tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f))),
+                privateAreas = listOf(PrivateArea("meeting_room", Rect(600f, 100f, 900f, 400f))),
+                collisionSettings = CollisionSettings("AABB", true)
+            )
+        }
 
         val viewModel = ViewModelProvider(this)[GatherViewModel::class.java]
 
@@ -41,7 +47,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    GatherApp(defaultMapConfig, viewModel)
+                    GatherApp(mapConfig, viewModel)
                 }
             }
         }

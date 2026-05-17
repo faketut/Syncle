@@ -3,9 +3,12 @@ package com.example.gather.model
 import com.example.gather.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
 
 data class ConnectionDetails(
     val serverUrl: String,
@@ -13,7 +16,13 @@ data class ConnectionDetails(
 )
 
 class AuthRepository {
-    
+    private val client = OkHttpClient.Builder()
+        .connectTimeout(10, TimeUnit.SECONDS)
+        .readTimeout(10, TimeUnit.SECONDS)
+        .build()
+
+    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
+
     suspend fun fetchSandboxConnectionDetails(
         roomName: String = "gather-office",
         participantName: String = "User_${(100..999).random()}"
@@ -22,29 +31,28 @@ class AuthRepository {
             val sandboxId = BuildConfig.LIVEKIT_SANDBOX_ID
             if (sandboxId.isEmpty()) return@withContext null
 
-            val url = URL("https://cloud-api.livekit.io/api/sandbox/connection-details")
-            val conn = url.openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.setRequestProperty("X-Sandbox-ID", sandboxId)
-            conn.setRequestProperty("Content-Type", "application/json")
-            conn.doOutput = true
-
-            val body = JSONObject().apply {
+            val bodyJson = JSONObject().apply {
                 put("room_name", roomName)
                 put("participant_name", participantName)
             }
 
-            conn.outputStream.use { it.write(body.toString().toByteArray()) }
+            val request = Request.Builder()
+                .url("https://cloud-api.livekit.io/api/sandbox/connection-details")
+                .post(bodyJson.toString().toRequestBody(jsonMediaType))
+                .header("X-Sandbox-ID", sandboxId)
+                .build()
 
-            if (conn.responseCode == 200) {
-                val response = conn.inputStream.bufferedReader().use { it.readText() }
-                val json = JSONObject(response)
-                ConnectionDetails(
-                    serverUrl = json.getString("serverUrl"),
-                    token = json.getString("participantToken")
-                )
-            } else {
-                null
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful && response.body != null) {
+                    val responseString = response.body!!.string()
+                    val json = JSONObject(responseString)
+                    ConnectionDetails(
+                        serverUrl = json.getString("serverUrl"),
+                        token = json.getString("participantToken")
+                    )
+                } else {
+                    null
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
