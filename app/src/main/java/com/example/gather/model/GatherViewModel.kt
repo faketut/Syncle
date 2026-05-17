@@ -9,6 +9,10 @@ import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.*
 import org.json.JSONObject
 
+enum class ConnectionStatus {
+    CONNECTING, CONNECTED, DISCONNECTED, ERROR
+}
+
 class GatherViewModel : ViewModel() {
     val avatarState = AvatarState(initialPosition = Offset(100f, 100f))
     val remotePeers = mutableStateListOf<RemotePeer>()
