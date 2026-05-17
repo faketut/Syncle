@@ -25,6 +25,7 @@ class GatherViewModel : ViewModel() {
     var token by mutableStateOf("")
     var isAutoFetching by mutableStateOf(false)
     var startupError by mutableStateOf<String?>(null)
+    var fetchError by mutableStateOf<String?>(null)
 
     private var liveKitService: LiveKitService? = null
     private var syncJob: Job? = null
@@ -37,23 +38,32 @@ class GatherViewModel : ViewModel() {
         if (url.isNotEmpty() || token.isNotEmpty() || isAutoFetching) return
         viewModelScope.launch {
             isAutoFetching = true
+            fetchError = null
             try {
-                println("GatherViewModel: Starting auto-fetch...")
-                val details = authRepository.fetchSandboxConnectionDetails()
+                println("GatherViewModel: Starting auto-fetch with 5s timeout...")
+                val details = withTimeoutOrNull(5000L) {
+                    authRepository.fetchSandboxConnectionDetails()
+                }
                 if (details != null) {
                     url = details.serverUrl
                     token = details.token
                     println("GatherViewModel: Auto-fetch success: $url")
                 } else {
-                    println("GatherViewModel: Auto-fetch returned null (check local.properties)")
+                    fetchError = "自动获取 Token 超时或无配置。请检查 Sandbox ID 是否有效，或直接点击下方【离线模式】单机预览。"
+                    println("GatherViewModel: Auto-fetch returned null or timed out")
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                startupError = "Startup Error: ${e.message}"
+                fetchError = "网络请求异常 (${e.localizedMessage})。请手动输入或使用离线模式。"
             } finally {
                 isAutoFetching = false
             }
         }
+    }
+
+    fun cancelAutoFetch() {
+        isAutoFetching = false
+        fetchError = "已手动跳过自动获取，可直接点击下方【离线模式】单机预览。"
     }
 
     fun connect(context: Context, mapConfig: MapConfig) {

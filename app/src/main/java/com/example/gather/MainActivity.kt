@@ -144,7 +144,13 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
 
             if (status == ConnectionStatus.CONNECTING || viewModel.isAutoFetching) {
                 CircularProgressIndicator(modifier = Modifier.padding(bottom = 16.dp))
-                Text(if (viewModel.isAutoFetching) "Fetching Sandbox Token..." else "Connecting to LiveKit...")
+                Text(if (viewModel.isAutoFetching) "Fetching Sandbox Token (5s timeout)..." else "Connecting to LiveKit...")
+                if (viewModel.isAutoFetching) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    TextButton(onClick = { viewModel.cancelAutoFetch() }) {
+                        Text("跳过自动获取 / 手动配置")
+                    }
+                }
             } else {
                 OutlinedTextField(
                     value = viewModel.url,
@@ -162,6 +168,15 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Paste JWT Token here...") }
                 )
+
+                if (viewModel.fetchError != null) {
+                    Text(
+                        text = viewModel.fetchError ?: "",
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                }
 
                 if (status == ConnectionStatus.ERROR) {
                     Text(
@@ -185,7 +200,7 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
                     onClick = { viewModel.offlineMode = true },
                     modifier = Modifier.padding(top = 16.dp)
                 ) {
-                    Text("Offline Mode (Preview Only)")
+                    Text("Offline Mode (Preview Only) / 离线单机预览")
                 }
             }
         }
