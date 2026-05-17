@@ -20,6 +20,7 @@ fun GatherScreen(
             mapConfig = mapConfig,
             avatarState = avatarState,
             remotePeers = remotePeers,
+            onMove = { delta -> avatarState.move(delta, mapConfig) },
             modifier = Modifier.fillMaxSize()
         )
 

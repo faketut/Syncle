@@ -20,6 +20,7 @@ fun SpatialCanvas(
     mapConfig: MapConfig,
     avatarState: AvatarState,
     remotePeers: List<RemotePeer>,
+    onMove: (Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var offset by remember { mutableStateOf(Offset.Zero) }
@@ -36,20 +37,14 @@ fun SpatialCanvas(
                 }
             }
             .pointerInput(Unit) {
-                // Simple touch to move logic for local testing
-                // In a real app, this might be a joystick or click-to-move
                 detectTapGestures { tapOffset ->
-                    // Convert screen tap to world coordinates
                     val worldTap = (tapOffset - offset) / scale
                     val delta = worldTap - avatarState.position
-                    // Move in small steps or teleport for this simple demo
-                    avatarState.move(delta, mapConfig)
+                    onMove(delta)
                 }
             }
     ) {
-        // ... (previous drawing code)
-        // 1. Draw Background (Simplified as a boundary for now)
-        // In a real app, use drawImage with mapConfig.backgroundImage
+        // 1. Draw Background
         drawRect(
             color = Color.White,
             topLeft = offset,
@@ -57,7 +52,7 @@ fun SpatialCanvas(
             style = Stroke(width = 2f)
         )
 
-        // 2. Draw Walkable Areas (Blueprint style: thin white lines or light fills)
+        // 2. Draw Walkable Areas
         mapConfig.walkableAreas.forEach { area ->
             drawRect(
                 color = Color.White.copy(alpha = 0.1f),
@@ -106,7 +101,7 @@ fun SpatialCanvas(
             }
         }
 
-        // 3b. Draw Private Areas (Conference Rooms)
+        // 3b. Draw Private Areas
         mapConfig.privateAreas.forEach { area ->
             drawRect(
                 color = Color.Magenta.copy(alpha = 0.05f),
@@ -140,7 +135,7 @@ fun SpatialCanvas(
         // 5. Draw Remote Peers
         remotePeers.forEach { peer ->
             drawCircle(
-                color = Color.Gray, // Distinct color for others
+                color = Color.Gray,
                 radius = avatarState.radius * scale,
                 center = Offset(
                     peer.position.x * scale + offset.x,
@@ -148,9 +143,5 @@ fun SpatialCanvas(
                 )
             )
         }
-        
-        // Draw Avatar Name/Label
-        // (Text drawing in Canvas requires native canvas or a layer, 
-        // for now we'll keep it minimal)
     }
 }
