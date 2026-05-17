@@ -5,14 +5,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import io.livekit.android.LiveKit
-import io.livekit.android.RoomOptions
-import io.livekit.android.events.collect
-import io.livekit.android.room.Room
-import io.livekit.android.room.participant.Participant
-import io.livekit.android.room.track.DataPublishReliability
-import io.livekit.android.room.track.RemoteVideoTrack
-import io.livekit.android.room.track.Track
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.*
 import org.json.JSONObject
@@ -30,7 +22,7 @@ class GatherViewModel : ViewModel() {
     var isAutoFetching by mutableStateOf(false)
     var startupError by mutableStateOf<String?>(null)
 
-    private var room: Room? = null
+    private var liveKitService: LiveKitService? = null
     private var syncJob: Job? = null
     private var lerpJob: Job? = null
 
@@ -63,55 +55,22 @@ class GatherViewModel : ViewModel() {
     fun connect(context: Context, mapConfig: MapConfig) {
         if (connectionStatus == ConnectionStatus.CONNECTING || connectionStatus == ConnectionStatus.CONNECTED) return
         connectionStatus = ConnectionStatus.CONNECTING
+        
+        liveKitService = LiveKitService(
+            context = context,
+            onDataReceived = { id, data -> onDataReceived(id, data) },
+            onParticipantDisconnected = { id -> remotePeers.removeAll { it.id == id } },
+            onVideoTrackSubscribed = { id, track -> updatePeerVideoTrack(id, track) }
+        )
+
         viewModelScope.launch {
-            try {
-                val currentRoom = LiveKit.create(
-                    appContext = context.applicationContext,
-                    options = RoomOptions(
-                        adaptiveStream = true,
-                        dynacast = true,
-                    )
-                )
-                room = currentRoom
-
-                setupRoomListener(currentRoom)
-
-                currentRoom.connect(
-                    url = url,
-                    token = token
-                )
-
+            val success = liveKitService?.connect(url, token) ?: false
+            if (success) {
                 startLoops(mapConfig)
                 connectionStatus = ConnectionStatus.CONNECTED
                 println("LiveKit: Connected successfully to $url")
-            } catch (e: Exception) {
-                e.printStackTrace()
+            } else {
                 connectionStatus = ConnectionStatus.ERROR
-            }
-        }
-    }
-
-    private fun setupRoomListener(currentRoom: Room) {
-        viewModelScope.launch {
-            currentRoom.events.collect { event ->
-                when (event) {
-                    is io.livekit.android.events.RoomEvent.DataReceived -> {
-                        val identity = event.participant?.identity?.value ?: ""
-                        onDataReceived(identity, event.data)
-                    }
-                    is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {
-                        val identity = event.participant.identity?.value
-                        remotePeers.removeAll { it.id == identity }
-                    }
-                    is io.livekit.android.events.RoomEvent.TrackSubscribed -> {
-                        val track = event.track
-                        if (track is RemoteVideoTrack) {
-                            val identity = event.participant.identity?.value ?: ""
-                            updatePeerVideoTrack(identity, track)
-                        }
-                    }
-                    else -> {}
-                }
             }
         }
     }
@@ -125,7 +84,7 @@ class GatherViewModel : ViewModel() {
         syncJob = viewModelScope.launch {
             while (isActive) {
                 broadcastPosition()
-                updateSpatialAudio(mapConfig)
+                liveKitService?.updateSpatialAudio(remotePeers, avatarState, mapConfig, maxDistance)
                 delay(50)
             }
         }
@@ -140,32 +99,15 @@ class GatherViewModel : ViewModel() {
         }
     }
 
-    private fun updateSpatialAudio(mapConfig: MapConfig) {
-        val currentRoom = room ?: return
-        remotePeers.forEach { peer ->
-            val volume = calculateVolume(avatarState, peer, mapConfig, maxDistance)
-            val participant = currentRoom.remoteParticipants.values.find { it.identity?.value == peer.id }
-            participant?.let { p ->
-                // Note: Track volume setting implementation
-            }
-        }
-    }
-
     private fun broadcastPosition() {
-        val currentRoom = room ?: return
+        val service = liveKitService ?: return
         val positionData = JSONObject().apply {
             put("type", "position")
             put("x", avatarState.position.x)
             put("y", avatarState.position.y)
             put("seq", System.currentTimeMillis())
         }
-
-        viewModelScope.launch {
-            currentRoom.localParticipant.publishData(
-                data = positionData.toString().toByteArray(),
-                reliability = DataPublishReliability.LOSSY
-            )
-        }
+        service.broadcastPosition(positionData.toString().toByteArray())
     }
 
     fun onDataReceived(participantId: String, data: ByteArray) {
@@ -210,7 +152,8 @@ class GatherViewModel : ViewModel() {
     fun disconnect() {
         syncJob?.cancel()
         lerpJob?.cancel()
-        room?.disconnect()
+        liveKitService?.disconnect()
+        liveKitService = null
         connectionStatus = ConnectionStatus.DISCONNECTED
     }
 
