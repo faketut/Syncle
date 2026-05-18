@@ -128,24 +128,40 @@ fun SpatialCanvas(
         }
 
         // ── 4. Local Avatar ──────────────────────────────────────────────────
+        val localCenter = Offset(
+            avatarState.position.x * scale + offset.x,
+            avatarState.position.y * scale + offset.y
+        )
+        if (avatarState.isSpeaking) {
+            drawCircle(
+                color = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                radius = avatarState.radius * scale * 1.5f,
+                center = localCenter
+            )
+        }
         drawCircle(
             color = Color(0xFF00E5FF),
             radius = avatarState.radius * scale,
-            center = Offset(
-                avatarState.position.x * scale + offset.x,
-                avatarState.position.y * scale + offset.y
-            )
+            center = localCenter
         )
 
         // ── 5. Remote Peers ──────────────────────────────────────────────────
         remotePeers.forEach { peer ->
+            val peerCenter = Offset(
+                peer.position.x * scale + offset.x,
+                peer.position.y * scale + offset.y
+            )
+            if (peer.isSpeaking) {
+                drawCircle(
+                    color = Color(0xFF4CAF50).copy(alpha = 0.5f),
+                    radius = avatarState.radius * scale * 1.5f,
+                    center = peerCenter
+                )
+            }
             drawCircle(
                 color = Color(0xFF9E9E9E),
                 radius = avatarState.radius * scale,
-                center = Offset(
-                    peer.position.x * scale + offset.x,
-                    peer.position.y * scale + offset.y
-                )
+                center = peerCenter
             )
         }
     }

@@ -17,6 +17,7 @@ class AvatarState(
     // Spotlight & Status
     var isSpotlighted by mutableStateOf(false)
     var status by mutableStateOf(UserStatus.AVAILABLE)
+    var isSpeaking by mutableStateOf(false)
 
     /**
      * Attempts to move the avatar by [delta].

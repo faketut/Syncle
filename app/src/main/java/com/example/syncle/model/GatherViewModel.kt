@@ -63,7 +63,9 @@ class SyncleViewModel : ViewModel() {
             context = context,
             onDataReceived = { id, data -> onDataReceived(id, data) },
             onParticipantDisconnected = { id -> remotePeers.removeAll { it.id == id } },
-            onVideoTrackSubscribed = { id, track -> updatePeerVideoTrack(id, track) }
+            onVideoTrackSubscribed = { id, track -> updatePeerVideoTrack(id, track) },
+            onActiveSpeakersChanged = { speakers -> updateActiveSpeakers(speakers) },
+            onParticipantAttributesChanged = { id, attrs -> updateParticipantAttributes(id, attrs) }
         )
 
         viewModelScope.launch {
@@ -150,6 +152,27 @@ class SyncleViewModel : ViewModel() {
             newPeer.videoTrack = track
             remotePeers.add(newPeer)
         }
+    }
+
+    private fun updateActiveSpeakers(speakingIds: List<String>) {
+        val localIdentity = liveKitService?.getLocalIdentity()
+        avatarState.isSpeaking = localIdentity != null && speakingIds.contains(localIdentity)
+        remotePeers.forEach { peer ->
+            peer.isSpeaking = speakingIds.contains(peer.id)
+        }
+    }
+
+    private fun updateParticipantAttributes(id: String, attributes: Map<String, String>) {
+        val statusStr = attributes["status"]
+        if (statusStr != null) {
+            val status = try { UserStatus.valueOf(statusStr) } catch(e: Exception) { UserStatus.AVAILABLE }
+            remotePeers.find { it.id == id }?.status = status
+        }
+    }
+
+    fun setLocalStatus(newStatus: UserStatus) {
+        avatarState.status = newStatus
+        liveKitService?.setLocalAttributes(mapOf("status" to newStatus.name))
     }
 
     fun disconnect() {

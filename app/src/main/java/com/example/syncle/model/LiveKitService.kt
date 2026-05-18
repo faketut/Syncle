@@ -12,13 +12,16 @@ import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 class LiveKitService(
     private val context: Context,
     private val onDataReceived: (String, ByteArray) -> Unit,
     private val onParticipantDisconnected: (String) -> Unit,
-    private val onVideoTrackSubscribed: (String, VideoTrack) -> Unit
+    private val onVideoTrackSubscribed: (String, VideoTrack) -> Unit,
+    private val onActiveSpeakersChanged: (List<String>) -> Unit,
+    private val onParticipantAttributesChanged: (String, Map<String, String>) -> Unit
 ) {
     private var room: Room? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -40,7 +43,6 @@ class LiveKitService(
                 url = url,
                 token = token
             )
-            // P0 Fix: enable microphone after connecting
             currentRoom.localParticipant.setMicrophoneEnabled(true)
             true
         } catch (e: Exception) {
@@ -54,10 +56,8 @@ class LiveKitService(
             currentRoom.events.collect { event ->
                 when (event) {
                     is io.livekit.android.events.RoomEvent.DataReceived -> {
-                        val identity = event.participant?.identity?.value
-                        if (!identity.isNullOrEmpty()) {
-                            onDataReceived(identity, event.data)
-                        }
+                        val identity = event.participant?.identity?.value ?: return@collect
+                        onDataReceived(identity, event.data)
                     }
                     is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {
                         val identity = event.participant.identity?.value ?: return@collect
@@ -66,9 +66,17 @@ class LiveKitService(
                     is io.livekit.android.events.RoomEvent.TrackSubscribed -> {
                         val track = event.track
                         if (track is RemoteVideoTrack) {
-                            val identity = event.participant.identity?.value ?: ""
+                            val identity = event.participant.identity?.value ?: return@collect
                             onVideoTrackSubscribed(identity, track)
                         }
+                    }
+                    is io.livekit.android.events.RoomEvent.ActiveSpeakersChanged -> {
+                        val speakingIds = event.speakers.mapNotNull { it.identity?.value }
+                        onActiveSpeakersChanged(speakingIds)
+                    }
+                    is io.livekit.android.events.RoomEvent.ParticipantAttributesChanged -> {
+                        val identity = event.participant.identity?.value ?: return@collect
+                        onParticipantAttributesChanged(identity, event.attributes)
                     }
                     else -> {}
                 }
@@ -100,11 +108,21 @@ class LiveKitService(
         remotePeers.forEach { peer ->
             val volume = SyncleViewModel.calculateVolume(localAvatar, peer, mapConfig, maxDistance)
             val participant = currentRoom.remoteParticipants.values.find { it.identity?.value == peer.id }
-            participant?.audioTracks?.values?.forEach { publication ->
-                val audioTrack = publication.track as? RemoteAudioTrack
-                audioTrack?.setVolume(volume.toDouble())
+            participant?.let { p ->
+                p.audioTracks.values.forEach { publication ->
+                    val audioTrack = publication.track as? RemoteAudioTrack
+                    audioTrack?.setVolume(volume.toDouble())
+                }
             }
         }
+    }
+
+    fun getLocalIdentity(): String? {
+        return room?.localParticipant?.identity?.value
+    }
+
+    fun setLocalAttributes(attributes: Map<String, String>) {
+        room?.localParticipant?.setAttributes(attributes)
     }
 
     fun disconnect() {

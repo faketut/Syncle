@@ -23,6 +23,7 @@ class RemotePeer(
     // Spotlight & Status
     var isSpotlighted by mutableStateOf(false)
     var status by mutableStateOf(UserStatus.AVAILABLE)
+    var isSpeaking by mutableStateOf(false)
 
     // Sync sequence to handle out-of-order packets
     var lastSequence: Long = -1
