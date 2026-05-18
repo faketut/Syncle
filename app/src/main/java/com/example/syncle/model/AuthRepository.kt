@@ -1,6 +1,6 @@
-package com.example.gather.model
+package com.example.syncle.model
 
-import com.example.gather.BuildConfig
+import com.example.syncle.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -24,7 +24,7 @@ class AuthRepository {
     private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
 
     suspend fun fetchSandboxConnectionDetails(
-        roomName: String = "gather-office",
+        roomName: String = "syncle-office",
         participantName: String = "User_${(100..999).random()}"
     ): ConnectionDetails? = withContext(Dispatchers.IO) {
         try {

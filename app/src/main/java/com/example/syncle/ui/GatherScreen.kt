@@ -1,15 +1,15 @@
-package com.example.gather.ui
+package com.example.syncle.ui
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.example.gather.model.AvatarState
-import com.example.gather.model.MapConfig
-import com.example.gather.model.RemotePeer
+import com.example.syncle.model.AvatarState
+import com.example.syncle.model.MapConfig
+import com.example.syncle.model.RemotePeer
 
 @Composable
-fun GatherScreen(
+fun SyncleScreen(
     mapConfig: MapConfig,
     avatarState: AvatarState,
     remotePeers: List<RemotePeer>

@@ -1,4 +1,4 @@
-package com.example.gather.model
+package com.example.syncle.model
 
 import android.content.Context
 import androidx.compose.runtime.*
@@ -13,7 +13,7 @@ enum class ConnectionStatus {
     CONNECTING, CONNECTED, DISCONNECTED, ERROR
 }
 
-class GatherViewModel : ViewModel() {
+class SyncleViewModel : ViewModel() {
     val avatarState = AvatarState(initialPosition = Offset(100f, 100f))
     val remotePeers = mutableStateListOf<RemotePeer>()
     
@@ -38,14 +38,14 @@ class GatherViewModel : ViewModel() {
         viewModelScope.launch {
             isAutoFetching = true
             try {
-                println("GatherViewModel: Starting auto-fetch...")
+                println("SyncleViewModel: Starting auto-fetch...")
                 val details = authRepository.fetchSandboxConnectionDetails()
                 if (details != null) {
                     url = details.serverUrl
                     token = details.token
-                    println("GatherViewModel: Auto-fetch success: $url")
+                    println("SyncleViewModel: Auto-fetch success: $url")
                 } else {
-                    println("GatherViewModel: Auto-fetch returned null (check local.properties)")
+                    println("SyncleViewModel: Auto-fetch returned null (check local.properties)")
                 }
             } catch (e: Exception) {
                 e.printStackTrace()

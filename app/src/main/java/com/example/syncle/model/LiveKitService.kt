@@ -1,4 +1,4 @@
-package com.example.gather.model
+package com.example.syncle.model
 
 import android.content.Context
 import io.livekit.android.LiveKit
@@ -92,7 +92,7 @@ class LiveKitService(
     ) {
         val currentRoom = room ?: return
         remotePeers.forEach { peer ->
-            val volume = GatherViewModel.calculateVolume(localAvatar, peer, mapConfig, maxDistance)
+            val volume = SyncleViewModel.calculateVolume(localAvatar, peer, mapConfig, maxDistance)
             val participant = currentRoom.remoteParticipants.values.find { it.identity?.value == peer.id }
             participant?.let { p ->
                 // Note: Track volume setting implementation in LiveKit SDK

@@ -1,4 +1,4 @@
-package com.example.gather.ui
+package com.example.syncle.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -11,9 +11,9 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import com.example.gather.model.AvatarState
-import com.example.gather.model.MapConfig
-import com.example.gather.model.RemotePeer
+import com.example.syncle.model.AvatarState
+import com.example.syncle.model.MapConfig
+import com.example.syncle.model.RemotePeer
 
 @Composable
 fun SpatialCanvas(
@@ -76,49 +76,45 @@ fun SpatialCanvas(
         // 3. Draw Tables
         mapConfig.tables.forEach { table ->
             val isNearby = avatarState.nearbyItemId == table.id
-            val color = if (isNearby) Color.Yellow else Color.Cyan
-            val alpha = if (isNearby) 0.4f else 0.2f
+            val alpha = if (isNearby) 0.8f else 0.4f
             
-            drawRect(
-                color = color.copy(alpha = alpha),
-                topLeft = Offset(
-                    table.rect.left * scale + offset.x,
-                    table.rect.top * scale + offset.y
-                ),
-                size = table.rect.size * scale
+            val centerX = table.rect.left + table.rect.width / 2f
+            val centerY = table.rect.top + table.rect.height / 2f
+            
+            drawCircle(
+                color = Color.White.copy(alpha = alpha),
+                radius = 12f * scale,
+                center = Offset(
+                    centerX * scale + offset.x,
+                    centerY * scale + offset.y
+                )
             )
             
             if (isNearby) {
-                drawRect(
-                    color = Color.Yellow,
-                    topLeft = Offset(
-                        table.rect.left * scale + offset.x,
-                        table.rect.top * scale + offset.y
+                drawCircle(
+                    color = Color.White,
+                    radius = 16f * scale,
+                    center = Offset(
+                        centerX * scale + offset.x,
+                        centerY * scale + offset.y
                     ),
-                    size = table.rect.size * scale,
-                    style = Stroke(width = 3f * scale)
+                    style = Stroke(width = 2f * scale)
                 )
             }
         }
 
         // 3b. Draw Private Areas
         mapConfig.privateAreas.forEach { area ->
-            drawRect(
-                color = Color.Magenta.copy(alpha = 0.05f),
-                topLeft = Offset(
-                    area.rect.left * scale + offset.x,
-                    area.rect.top * scale + offset.y
-                ),
-                size = area.rect.size * scale
-            )
-            drawRect(
-                color = Color.Magenta.copy(alpha = 0.2f),
-                topLeft = Offset(
-                    area.rect.left * scale + offset.x,
-                    area.rect.top * scale + offset.y
-                ),
-                size = area.rect.size * scale,
-                style = Stroke(width = 1f)
+            val centerX = area.rect.left + area.rect.width / 2f
+            val centerY = area.rect.top + area.rect.height / 2f
+            
+            drawCircle(
+                color = Color.White.copy(alpha = 0.4f),
+                radius = 12f * scale,
+                center = Offset(
+                    centerX * scale + offset.x,
+                    centerY * scale + offset.y
+                )
             )
         }
 

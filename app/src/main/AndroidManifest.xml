@@ -24,7 +24,7 @@
         <property android:name="android.window.PROPERTY_COMPAT_ALLOW_PAGE_SIZE_COMPAT" android:value="true" />
 
         <activity
-            android:name="com.example.gather.MainActivity"
+            android:name="com.example.syncle.MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

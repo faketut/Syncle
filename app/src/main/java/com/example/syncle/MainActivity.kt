@@ -1,4 +1,4 @@
-package com.example.gather
+package com.example.syncle
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -17,8 +17,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
 import kotlin.OptIn
-import com.example.gather.model.*
-import com.example.gather.ui.GatherScreen
+import com.example.syncle.model.*
+import com.example.syncle.ui.SyncleScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
             )
         }
 
-        val viewModel = ViewModelProvider(this)[GatherViewModel::class.java]
+        val viewModel = ViewModelProvider(this)[SyncleViewModel::class.java]
 
         setContent {
             MaterialTheme {
@@ -47,7 +47,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    GatherApp(mapConfig, viewModel)
+                    SyncleApp(mapConfig, viewModel)
                 }
             }
         }
@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
+fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
     var permissionsGranted by remember { mutableStateOf(false) }
     var permissionCheckDone by remember { mutableStateOf(false) }
@@ -97,7 +97,7 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Gather 需要麦克风与相机权限以提供空间音视频协作功能",
+                text = "Syncle 需要麦克风与相机权限以提供空间音视频协作功能",
                 style = MaterialTheme.typography.bodyLarge,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
@@ -137,7 +137,7 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Gather - Spatial Workstream",
+                text = "Syncle - Spatial Workstream",
                 style = MaterialTheme.typography.headlineMedium,
                 modifier = Modifier.padding(bottom = 32.dp)
             )
@@ -190,7 +190,7 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
             }
         }
     } else {
-        GatherScreen(
+        SyncleScreen(
             mapConfig = mapConfig,
             avatarState = viewModel.avatarState,
             remotePeers = viewModel.remotePeers
@@ -200,7 +200,7 @@ fun GatherApp(mapConfig: MapConfig, viewModel: GatherViewModel) {
 
 @Preview(showBackground = true, widthDp = 400, heightDp = 800)
 @Composable
-fun GatherPreview() {
+fun SynclePreview() {
     val mockMapConfig = MapConfig(
         mapName = "Office Blueprint",
         backgroundImage = "room1.png",
@@ -215,7 +215,7 @@ fun GatherPreview() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            GatherApp(mockMapConfig, GatherViewModel())
+            SyncleApp(mockMapConfig, SyncleViewModel())
         }
     }
 }

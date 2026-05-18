@@ -1,4 +1,4 @@
-package com.example.gather.ui
+package com.example.syncle.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,8 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.gather.model.AvatarState
-import com.example.gather.model.RemotePeer
+import com.example.syncle.model.AvatarState
+import com.example.syncle.model.RemotePeer
 import io.livekit.android.room.track.VideoTrack
 
 @Composable

@@ -1,4 +1,4 @@
-package com.example.gather.model
+package com.example.syncle.model
 
 import androidx.compose.ui.geometry.Rect
 import org.json.JSONObject
