@@ -33,10 +33,6 @@ fun SpatialCanvas(
     // 加载 R.drawable.room1 背景贴图
     val backgroundBitmap = ImageBitmap.imageResource(id = R.drawable.room1)
 
-    // 大世界物理地图总尺寸完全绑定贴图真实像素分辨率，拒绝任何硬编码与拉伸猜测
-    val mapWidth = backgroundBitmap.width.toFloat()
-    val mapHeight = backgroundBitmap.height.toFloat()
-
     // 原生画笔用于绘制精美抗锯齿文字标签
     val textPaint = remember {
         Paint().apply {
@@ -53,8 +49,9 @@ fun SpatialCanvas(
         }
     }
 
-    // 记录虚拟相机当前偏移量状态供手势点击转换使用
-    var cameraOffsetState by remember { mutableStateOf(Offset.Zero) }
+    // 记录 CenterCrop 变换参数供手势点击转换使用
+    var offsetState by remember { mutableStateOf(Offset.Zero) }
+    var scaleState by remember { mutableStateOf(1f) }
 
     Canvas(
         modifier = modifier
@@ -62,8 +59,8 @@ fun SpatialCanvas(
             .background(Color(0xFF0F172A)) // 深色科技感底层背景
             .pointerInput(Unit) {
                 detectTapGestures { tapOffset ->
-                    // 屏幕点击坐标 + 虚拟相机偏移量 = 真实大世界点击坐标
-                    val worldTap = tapOffset + cameraOffsetState
+                    // 屏幕点击坐标反向变换：(tapOffset - offset) / scale = 贴图原生像素坐标
+                    val worldTap = (tapOffset - offsetState) / scaleState
                     val delta = worldTap - avatarState.position
                     onMove(delta)
                 }
@@ -72,28 +69,38 @@ fun SpatialCanvas(
         val viewportWidth = this.size.width
         val viewportHeight = this.size.height
 
-        // 核心虚拟相机算法：将镜头中心锁定在玩家化身，并对世界边缘进行平滑钳制 (Clamping)
-        val cameraX = (avatarState.position.x - viewportWidth / 2f).coerceIn(0f, maxOf(0f, mapWidth - viewportWidth))
-        val cameraY = (avatarState.position.y - viewportHeight / 2f).coerceIn(0f, maxOf(0f, mapHeight - viewportHeight))
-        val cameraOffset = Offset(cameraX, cameraY)
-        cameraOffsetState = cameraOffset
+        val bgWidth = backgroundBitmap.width.toFloat()
+        val bgHeight = backgroundBitmap.height.toFloat()
 
-        // 利用 withTransform 将整个视口向相反方向平移，内部全要素直接按大世界绝对坐标渲染
+        // 核心 CenterCrop 矩阵变换算法：等比缩放并完全铺满屏幕 (不留黑边、超出裁剪)
+        val scaleX = viewportWidth / bgWidth
+        val scaleY = viewportHeight / bgHeight
+        val scale = maxOf(scaleX, scaleY)
+        scaleState = scale
+
+        // 计算居中偏移量
+        val offsetX = (viewportWidth - bgWidth * scale) / 2f
+        val offsetY = (viewportHeight - bgHeight * scale) / 2f
+        val offset = Offset(offsetX, offsetY)
+        offsetState = offset
+
+        // 利用 withTransform 将视口变换矩阵应用到整个绘制流程，内部全要素直接按贴图原生像素坐标渲染
         withTransform({
-            translate(left = -cameraOffset.x, top = -cameraOffset.y)
+            translate(left = offset.x, top = offset.y)
+            scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
         }) {
-            // 1. Draw Background Image (大世界贴图展开)
+            // 1. Draw Background Image (贴图原生分辨率绘制)
             drawImage(
                 image = backgroundBitmap,
                 dstOffset = IntOffset.Zero,
-                dstSize = IntSize(mapWidth.toInt(), mapHeight.toInt())
+                dstSize = IntSize(bgWidth.toInt(), bgHeight.toInt())
             )
 
             // 1b. 绘制一层轻微的深色网格遮罩提升科技感与对比度
             drawRect(
                 color = Color(0xFF0F172A).copy(alpha = 0.35f),
                 topLeft = Offset.Zero,
-                size = Size(mapWidth, mapHeight)
+                size = Size(bgWidth, bgHeight)
             )
 
             // 2. Draw Walkable Areas (可移动区域光环边框)
