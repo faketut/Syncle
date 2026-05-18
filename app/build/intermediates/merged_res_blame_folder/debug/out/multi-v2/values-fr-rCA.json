@@ -1,10 +1,10 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.gather.app-mergeDebugResources-42:/values-fr-rCA/values-fr-rCA.xml",
+            "outputFile": "com.example.syncle.app-mergeDebugResources-42:/values-fr-rCA/values-fr-rCA.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\jian\\.gradle\\caches\\transforms-3\\a461ca37076d76f98d0bc0a7f0d53d8f\\transformed\\core-1.13.1\\res\\values-fr-rCA\\values-fr-rCA.xml",
+                    "source": "C:\\Users\\jian\\.gradle\\caches\\8.9\\transforms\\4662b8e118bf2633f8abd8c39b6ed1ef\\transformed\\core-1.13.1\\res\\values-fr-rCA\\values-fr-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",
@@ -21,24 +21,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\jian\\.gradle\\caches\\transforms-3\\958831249e6df51ed7f9152ae73dbba0\\transformed\\jetified-material3-1.0.0\\res\\values-fr-rCA\\values-fr-rCA.xml",
-                    "from": {
-                        "startLines": "2,3,4",
-                        "startColumns": "4,4,4",
-                        "startOffsets": "55,130,204",
-                        "endColumns": "74,73,76",
-                        "endOffsets": "125,199,276"
-                    },
-                    "to": {
-                        "startLines": "11,14,16",
-                        "startColumns": "4,4,4",
-                        "startOffsets": "1015,1294,1455",
-                        "endColumns": "74,73,76",
-                        "endOffsets": "1085,1363,1527"
-                    }
-                },
-                {
-                    "source": "C:\\Users\\jian\\.gradle\\caches\\transforms-3\\a545ccfca0a79ed9b3f93456a0e58018\\transformed\\jetified-ui-1.4.0\\res\\values-fr-rCA\\values-fr-rCA.xml",
+                    "source": "C:\\Users\\jian\\.gradle\\caches\\8.9\\transforms\\a2652f5c5de42a5afd90ced72c1f2b42\\transformed\\jetified-ui-1.4.0\\res\\values-fr-rCA\\values-fr-rCA.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
@@ -52,6 +35,23 @@
                         "startOffsets": "828,927,1090,1188,1368,1532,1612,1706,1798,1885,1956,2024,2105,2190,2367,2446,2515",
                         "endColumns": "98,87,97,105,86,79,93,91,86,70,67,80,84,75,78,68,121",
                         "endOffsets": "922,1010,1183,1289,1450,1607,1701,1793,1880,1951,2019,2100,2185,2261,2441,2510,2632"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\jian\\.gradle\\caches\\8.9\\transforms\\38f969e3e88aa0fe46d1a679e80b9e4c\\transformed\\jetified-material3-1.0.0\\res\\values-fr-rCA\\values-fr-rCA.xml",
+                    "from": {
+                        "startLines": "2,3,4",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,130,204",
+                        "endColumns": "74,73,76",
+                        "endOffsets": "125,199,276"
+                    },
+                    "to": {
+                        "startLines": "11,14,16",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "1015,1294,1455",
+                        "endColumns": "74,73,76",
+                        "endOffsets": "1085,1363,1527"
                     }
                 }
             ]

@@ -15,7 +15,7 @@
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
-        android:theme="@style/Theme.Gather"
+        android:theme="@style/Theme.Syncle"
         android:supportsRtl="true"
         android:extractNativeLibs="true">
 

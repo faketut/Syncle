@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace 'com.example.gather'
+    namespace 'com.example.syncle'
     compileSdk 34
 
     // Load local.properties manually
@@ -15,7 +15,7 @@ android {
     }
 
     defaultConfig {
-        applicationId "com.example.gather"
+        applicationId "com.example.syncle"
         minSdk 24
         targetSdk 34
         versionCode 1

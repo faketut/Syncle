@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.gather"
+    package="com.example.syncle"
     android:versionCode="1"
     android:versionName="1.0" >
 
@@ -9,6 +9,8 @@
         android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
@@ -24,27 +26,34 @@
         android:name="android.hardware.camera.autofocus"
         android:required="false" />
 
-    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
     <permission
-        android:name="com.example.gather.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        android:name="com.example.syncle.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
         android:protectionLevel="signature" />
 
-    <uses-permission android:name="com.example.gather.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+    <uses-permission android:name="com.example.syncle.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
 
     <application
         android:allowBackup="true"
         android:appComponentFactory="androidx.core.app.CoreComponentFactory"
         android:debuggable="true"
-        android:extractNativeLibs="false"
+        android:extractNativeLibs="true"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:testOnly="true"
-        android:theme="@style/Theme.Gather" >
+        android:theme="@style/Theme.Syncle" >
+
+        <!-- 显式声明 Android 15 16KB 内存页大小兼容模式 -->
+        <property
+            android:name="android.app.PROPERTY_16KB_COMPAT"
+            android:value="true" />
+        <property
+            android:name="android.window.PROPERTY_COMPAT_ALLOW_PAGE_SIZE_COMPAT"
+            android:value="true" />
+
         <activity
-            android:name="com.example.gather.MainActivity"
+            android:name="com.example.syncle.MainActivity"
             android:exported="true" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -68,7 +77,7 @@
 
         <provider
             android:name="androidx.startup.InitializationProvider"
-            android:authorities="com.example.gather.androidx-startup"
+            android:authorities="com.example.syncle.androidx-startup"
             android:exported="false" >
             <meta-data
                 android:name="androidx.emoji2.text.EmojiCompatInitializer"

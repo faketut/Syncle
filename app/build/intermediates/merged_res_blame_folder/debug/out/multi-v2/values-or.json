@@ -1,10 +1,27 @@
 {
     "logs": [
         {
-            "outputFile": "com.example.gather.app-mergeDebugResources-42:/values-or/values-or.xml",
+            "outputFile": "com.example.syncle.app-mergeDebugResources-42:/values-or/values-or.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\jian\\.gradle\\caches\\transforms-3\\958831249e6df51ed7f9152ae73dbba0\\transformed\\jetified-material3-1.0.0\\res\\values-or\\values-or.xml",
+                    "source": "C:\\Users\\jian\\.gradle\\caches\\8.9\\transforms\\4662b8e118bf2633f8abd8c39b6ed1ef\\transformed\\core-1.13.1\\res\\values-or\\values-or.xml",
+                    "from": {
+                        "startLines": "2,3,4,5,6,7,8,9",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,158,260,363,468,569,671,790",
+                        "endColumns": "102,101,102,104,100,101,118,100",
+                        "endOffsets": "153,255,358,463,564,666,785,886"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,26",
+                        "startColumns": "4,4,4,4,4,4,4,4",
+                        "startOffsets": "105,208,310,413,518,619,721,2263",
+                        "endColumns": "102,101,102,104,100,101,118,100",
+                        "endOffsets": "203,305,408,513,614,716,835,2359"
+                    }
+                },
+                {
+                    "source": "C:\\Users\\jian\\.gradle\\caches\\8.9\\transforms\\38f969e3e88aa0fe46d1a679e80b9e4c\\transformed\\jetified-material3-1.0.0\\res\\values-or\\values-or.xml",
                     "from": {
                         "startLines": "2,3,4",
                         "startColumns": "4,4,4",
@@ -21,7 +38,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\jian\\.gradle\\caches\\transforms-3\\a545ccfca0a79ed9b3f93456a0e58018\\transformed\\jetified-ui-1.4.0\\res\\values-or\\values-or.xml",
+                    "source": "C:\\Users\\jian\\.gradle\\caches\\8.9\\transforms\\a2652f5c5de42a5afd90ced72c1f2b42\\transformed\\jetified-ui-1.4.0\\res\\values-or\\values-or.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
@@ -35,23 +52,6 @@
                         "startOffsets": "840,937,1110,1202,1373,1543,1620,1718,1806,1893,1963,2033,2111,2193,2364,2447,2514",
                         "endColumns": "96,86,91,99,85,76,97,87,86,69,69,77,81,69,82,66,118",
                         "endOffsets": "932,1019,1197,1297,1454,1615,1713,1801,1888,1958,2028,2106,2188,2258,2442,2509,2628"
-                    }
-                },
-                {
-                    "source": "C:\\Users\\jian\\.gradle\\caches\\transforms-3\\a461ca37076d76f98d0bc0a7f0d53d8f\\transformed\\core-1.13.1\\res\\values-or\\values-or.xml",
-                    "from": {
-                        "startLines": "2,3,4,5,6,7,8,9",
-                        "startColumns": "4,4,4,4,4,4,4,4",
-                        "startOffsets": "55,158,260,363,468,569,671,790",
-                        "endColumns": "102,101,102,104,100,101,118,100",
-                        "endOffsets": "153,255,358,463,564,666,785,886"
-                    },
-                    "to": {
-                        "startLines": "2,3,4,5,6,7,8,26",
-                        "startColumns": "4,4,4,4,4,4,4,4",
-                        "startOffsets": "105,208,310,413,518,619,721,2263",
-                        "endColumns": "102,101,102,104,100,101,118,100",
-                        "endOffsets": "203,305,408,513,614,716,835,2359"
                     }
                 }
             ]

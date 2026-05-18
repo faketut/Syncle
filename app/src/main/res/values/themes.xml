@@ -1,3 +1,3 @@
 <resources>
-    <style name="Theme.Gather" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Syncle" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
