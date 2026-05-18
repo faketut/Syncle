@@ -12,7 +12,8 @@ import com.example.syncle.model.RemotePeer
 fun SyncleScreen(
     mapConfig: MapConfig,
     avatarState: AvatarState,
-    remotePeers: List<RemotePeer>
+    remotePeers: List<RemotePeer>,
+    onJoinRoom: (roomId: String) -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         // 1. Bottom Layer: Spatial Canvas
@@ -21,6 +22,7 @@ fun SyncleScreen(
             avatarState = avatarState,
             remotePeers = remotePeers,
             onMove = { delta -> avatarState.move(delta, mapConfig) },
+            onJoinRoom = onJoinRoom,
             modifier = Modifier.fillMaxSize()
         )
 

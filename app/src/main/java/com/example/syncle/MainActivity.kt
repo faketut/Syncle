@@ -33,7 +33,7 @@ class MainActivity : ComponentActivity() {
                 mapName = "Office Blueprint (Fallback)",
                 backgroundImage = "room1.png",
                 walkableAreas = listOf(Rect(0f, 0f, 2000f, 2000f)),
-                tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f))),
+                tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), roomId = "room-table-1")),
                 privateAreas = listOf(PrivateArea("meeting_room", Rect(600f, 100f, 900f, 400f))),
                 collisionSettings = CollisionSettings("AABB", true)
             )
@@ -193,7 +193,11 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         SyncleScreen(
             mapConfig = mapConfig,
             avatarState = viewModel.avatarState,
-            remotePeers = viewModel.remotePeers
+            remotePeers = viewModel.remotePeers,
+            onJoinRoom = { roomId ->
+                // TODO: disconnect from lobby room, reconnect to table's private room
+                android.util.Log.i("SyncleNav", "Joining meeting room: $roomId")
+            }
         )
     }
 }
@@ -205,7 +209,7 @@ fun SynclePreview() {
         mapName = "Office Blueprint",
         backgroundImage = "room1.png",
         walkableAreas = listOf(Rect(0f, 0f, 1000f, 1000f)),
-        tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f))),
+        tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), roomId = "room-table-1")),
         privateAreas = listOf(PrivateArea("meeting_room", Rect(600f, 100f, 900f, 400f))),
         collisionSettings = CollisionSettings("AABB", true)
     )

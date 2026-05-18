@@ -20,7 +20,9 @@ data class PrivateArea(
 
 data class InteractableItem(
     val id: String,
-    val rect: Rect
+    val rect: Rect,
+    /** LiveKit room name / meeting room identifier for this table */
+    val roomId: String = id
 )
 
 data class CollisionSettings(
