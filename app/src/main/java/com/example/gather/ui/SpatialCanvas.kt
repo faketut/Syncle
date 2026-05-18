@@ -30,12 +30,12 @@ fun SpatialCanvas(
     onMove: (Offset) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    // 大世界地图总尺寸基准 (对应 room1.png 高清贴图展开大小)
-    val mapWidth = 2048f
-    val mapHeight = 2048f
-
     // 加载 R.drawable.room1 背景贴图
     val backgroundBitmap = ImageBitmap.imageResource(id = R.drawable.room1)
+
+    // 大世界物理地图总尺寸完全绑定贴图真实像素分辨率，拒绝任何硬编码与拉伸猜测
+    val mapWidth = backgroundBitmap.width.toFloat()
+    val mapHeight = backgroundBitmap.height.toFloat()
 
     // 原生画笔用于绘制精美抗锯齿文字标签
     val textPaint = remember {
