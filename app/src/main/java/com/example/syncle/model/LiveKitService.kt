@@ -6,10 +6,12 @@ import io.livekit.android.RoomOptions
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.DataPublishReliability
+import io.livekit.android.room.track.RemoteAudioTrack
 import io.livekit.android.room.track.RemoteVideoTrack
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class LiveKitService(
@@ -19,7 +21,7 @@ class LiveKitService(
     private val onVideoTrackSubscribed: (String, VideoTrack) -> Unit
 ) {
     private var room: Room? = null
-    private val serviceScope = CoroutineScope(Dispatchers.Main)
+    private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     suspend fun connect(url: String, token: String): Boolean {
         return try {
@@ -38,6 +40,8 @@ class LiveKitService(
                 url = url,
                 token = token
             )
+            // P0 Fix: enable microphone after connecting
+            currentRoom.localParticipant.setMicrophoneEnabled(true)
             true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -50,11 +54,13 @@ class LiveKitService(
             currentRoom.events.collect { event ->
                 when (event) {
                     is io.livekit.android.events.RoomEvent.DataReceived -> {
-                        val identity = event.participant?.identity?.value ?: ""
-                        onDataReceived(identity, event.data)
+                        val identity = event.participant?.identity?.value
+                        if (!identity.isNullOrEmpty()) {
+                            onDataReceived(identity, event.data)
+                        }
                     }
                     is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {
-                        val identity = event.participant.identity?.value ?: ""
+                        val identity = event.participant.identity?.value ?: return@collect
                         onParticipantDisconnected(identity)
                     }
                     is io.livekit.android.events.RoomEvent.TrackSubscribed -> {
@@ -94,14 +100,16 @@ class LiveKitService(
         remotePeers.forEach { peer ->
             val volume = SyncleViewModel.calculateVolume(localAvatar, peer, mapConfig, maxDistance)
             val participant = currentRoom.remoteParticipants.values.find { it.identity?.value == peer.id }
-            participant?.let { p ->
-                // Note: Track volume setting implementation in LiveKit SDK
+            participant?.audioTracks?.values?.forEach { publication ->
+                val audioTrack = publication.track as? RemoteAudioTrack
+                audioTrack?.setVolume(volume.toDouble())
             }
         }
     }
 
     fun disconnect() {
         try {
+            serviceScope.cancel()
             room?.disconnect()
             room = null
         } catch (e: Exception) {
