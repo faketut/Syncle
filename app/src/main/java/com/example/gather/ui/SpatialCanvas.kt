@@ -49,8 +49,9 @@ fun SpatialCanvas(
         }
     }
 
-    // 记录虚拟相机当前偏移量状态供手势点击转换使用
+    // 记录相机偏移量与等比缩放状态供手势点击转换使用
     var cameraOffsetState by remember { mutableStateOf(Offset.Zero) }
+    var scaleState by remember { mutableStateOf(1f) }
 
     Canvas(
         modifier = modifier
@@ -58,8 +59,8 @@ fun SpatialCanvas(
             .background(Color(0xFF0F172A)) // 深色科技感底层背景
             .pointerInput(Unit) {
                 detectTapGestures { tapOffset ->
-                    // 屏幕点击坐标 + 虚拟相机偏移量 = 真实大世界点击坐标
-                    val worldTap = tapOffset + cameraOffsetState
+                    // 屏幕点击坐标反向变换：(tapOffset + cameraOffset) / scale = 贴图原生像素坐标
+                    val worldTap = (tapOffset + cameraOffsetState) / scaleState
                     val delta = worldTap - avatarState.position
                     onMove(delta)
                 }
@@ -71,17 +72,26 @@ fun SpatialCanvas(
         val bgWidth = backgroundBitmap.width.toFloat()
         val bgHeight = backgroundBitmap.height.toFloat()
 
-        // 核心 RPG 视角算法：无论人物走到何处，镜头中心永远死死锁定在玩家化身 (无 coerceIn 钳制)
-        val cameraX = avatarState.position.x - viewportWidth / 2f
-        val cameraY = avatarState.position.y - viewportHeight / 2f
+        // 1. 计算等比缩放铺满基准比例 (确保地图放大到完全铺满屏幕，绝无黑边)
+        val scaleX = viewportWidth / bgWidth
+        val scaleY = viewportHeight / bgHeight
+        val scale = maxOf(scaleX, scaleY)
+        scaleState = scale
+
+        // 2. 核心 RPG 视角算法：将本地玩家化身的大世界缩放坐标死死锁定在屏幕正中央
+        val avatarWorldX = avatarState.position.x * scale
+        val avatarWorldY = avatarState.position.y * scale
+        val cameraX = avatarWorldX - viewportWidth / 2f
+        val cameraY = avatarWorldY - viewportHeight / 2f
         val cameraOffset = Offset(cameraX, cameraY)
         cameraOffsetState = cameraOffset
 
         // 利用 withTransform 将视口变换矩阵应用到整个绘制流程，内部全要素直接按贴图原生像素坐标渲染
         withTransform({
             translate(left = -cameraOffset.x, top = -cameraOffset.y)
+            scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
         }) {
-            // 1. Draw Background Image (贴图原生分辨率绘制，移动时反向平移)
+            // 1. Draw Background Image (贴图原生分辨率绘制，GPU自动等比放大并随移动反向平移)
             drawImage(
                 image = backgroundBitmap,
                 dstOffset = IntOffset.Zero,
