@@ -1,0 +1,47 @@
+# *.iml files
+*.iml
+
+# Gradle files
+.gradle/
+build/
+app/build/
+*/build/
+
+# Local configuration file (sdk path, keys, etc)
+local.properties
+
+# Log Files
+*.log
+
+# Android Studio Navigation editor temp files
+.navigation/
+
+# Android Studio captures folder
+captures/
+
+# IntelliJ IDE
+.idea/
+*.iws
+*.workspace.xml
+*.tasks.zip
+
+# Keystore files
+*.jks
+*.keystore
+
+# External native build folder generated in Android Studio 2.2 and later
+.externalNativeBuild/
+.cxx/
+
+# Google Services (e.g. APIs Client Library)
+google-services.json
+
+# Mac OS files
+.DS_Store
+
+# Temporary files / Scratch
+scratch/
+*.tmp
+.vscode
+
+
