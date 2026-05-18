@@ -49,9 +49,8 @@ fun SpatialCanvas(
         }
     }
 
-    // 记录 CenterCrop 变换参数供手势点击转换使用
-    var offsetState by remember { mutableStateOf(Offset.Zero) }
-    var scaleState by remember { mutableStateOf(1f) }
+    // 记录虚拟相机当前偏移量状态供手势点击转换使用
+    var cameraOffsetState by remember { mutableStateOf(Offset.Zero) }
 
     Canvas(
         modifier = modifier
@@ -59,8 +58,8 @@ fun SpatialCanvas(
             .background(Color(0xFF0F172A)) // 深色科技感底层背景
             .pointerInput(Unit) {
                 detectTapGestures { tapOffset ->
-                    // 屏幕点击坐标反向变换：(tapOffset - offset) / scale = 贴图原生像素坐标
-                    val worldTap = (tapOffset - offsetState) / scaleState
+                    // 屏幕点击坐标 + 虚拟相机偏移量 = 真实大世界点击坐标
+                    val worldTap = tapOffset + cameraOffsetState
                     val delta = worldTap - avatarState.position
                     onMove(delta)
                 }
@@ -72,24 +71,17 @@ fun SpatialCanvas(
         val bgWidth = backgroundBitmap.width.toFloat()
         val bgHeight = backgroundBitmap.height.toFloat()
 
-        // 核心 CenterCrop 矩阵变换算法：等比缩放并完全铺满屏幕 (不留黑边、超出裁剪)
-        val scaleX = viewportWidth / bgWidth
-        val scaleY = viewportHeight / bgHeight
-        val scale = maxOf(scaleX, scaleY)
-        scaleState = scale
-
-        // 计算居中偏移量
-        val offsetX = (viewportWidth - bgWidth * scale) / 2f
-        val offsetY = (viewportHeight - bgHeight * scale) / 2f
-        val offset = Offset(offsetX, offsetY)
-        offsetState = offset
+        // 核心 RPG 视角算法：无论人物走到何处，镜头中心永远死死锁定在玩家化身 (无 coerceIn 钳制)
+        val cameraX = avatarState.position.x - viewportWidth / 2f
+        val cameraY = avatarState.position.y - viewportHeight / 2f
+        val cameraOffset = Offset(cameraX, cameraY)
+        cameraOffsetState = cameraOffset
 
         // 利用 withTransform 将视口变换矩阵应用到整个绘制流程，内部全要素直接按贴图原生像素坐标渲染
         withTransform({
-            translate(left = offset.x, top = offset.y)
-            scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
+            translate(left = -cameraOffset.x, top = -cameraOffset.y)
         }) {
-            // 1. Draw Background Image (贴图原生分辨率绘制)
+            // 1. Draw Background Image (贴图原生分辨率绘制，移动时反向平移)
             drawImage(
                 image = backgroundBitmap,
                 dstOffset = IntOffset.Zero,
@@ -252,7 +244,7 @@ fun SpatialCanvas(
                 )
             }
 
-            // 5. Draw Local Avatar (本地玩家化身 - 炫酷拟物高光)
+            // 5. Draw Local Avatar (本地玩家化身 - 永远死死固定在屏幕正中央！)
             val localCenter = avatarState.position
             val localRadius = avatarState.radius
 
