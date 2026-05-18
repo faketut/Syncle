@@ -23,6 +23,7 @@ import com.example.syncle.model.AvatarState
 import com.example.syncle.model.InteractableItem
 import com.example.syncle.model.MapConfig
 import com.example.syncle.model.RemotePeer
+import io.livekit.android.room.participant.ConnectionQuality
 
 @Composable
 fun SpatialCanvas(
@@ -71,7 +72,7 @@ fun SpatialCanvas(
                         }
                         if (tappedTable != null) {
                             // User explicitly tapped the highlighted table → join its room
-                            onJoinRoom(tappedTable.roomId)
+                            onJoinRoom(tappedTable.id)
                             return@detectTapGestures
                         }
                     }
@@ -93,7 +94,7 @@ fun SpatialCanvas(
         )
 
         // ── 2. Collision map is intentionally NOT rendered ───────────────────
-        // walkableAreas, tables (fill), and privateAreas are kept in MapConfig
+        // walkableAreas and tables are kept in MapConfig for collision and table meetings
         // solely for physics / AABB collision and spatial-audio calculations.
 
         // ── 3. Highlight border for the nearby / colliding table ─────────────
@@ -144,6 +145,24 @@ fun SpatialCanvas(
             radius = avatarState.radius * scale,
             center = localCenter
         )
+        
+        val drawConnectionQuality = { quality: ConnectionQuality, center: Offset ->
+            val color = when (quality) {
+                ConnectionQuality.EXCELLENT -> Color(0xFF4CAF50)
+                ConnectionQuality.GOOD -> Color(0xFFFFEB3B)
+                ConnectionQuality.POOR, ConnectionQuality.LOST -> Color(0xFFF44336)
+                else -> Color.Transparent
+            }
+            if (color != Color.Transparent) {
+                drawCircle(
+                    color = color,
+                    radius = 5f * scale,
+                    center = center + Offset(avatarState.radius * scale * 0.7f, -avatarState.radius * scale * 0.7f)
+                )
+            }
+        }
+        
+        drawConnectionQuality(avatarState.connectionQuality, localCenter)
 
         // ── 5. Remote Peers ──────────────────────────────────────────────────
         remotePeers.forEach { peer ->
@@ -163,6 +182,7 @@ fun SpatialCanvas(
                 radius = avatarState.radius * scale,
                 center = peerCenter
             )
+            drawConnectionQuality(peer.connectionQuality, peerCenter)
         }
     }
 }

@@ -5,6 +5,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.*
 import org.json.JSONObject
@@ -28,7 +29,16 @@ class SyncleViewModel : ViewModel() {
     private var liveKitService: LiveKitService? = null
     private var syncJob: Job? = null
     private var lerpJob: Job? = null
-    private var inMeetingRoom = false
+
+    /** Active table meeting (same LiveKit room; isolated via attributes + volume) */
+    var activeTableMeetingId by mutableStateOf<String?>(null)
+        private set
+
+    var meetingMicEnabled by mutableStateOf(true)
+        private set
+
+    var meetingCameraEnabled by mutableStateOf(false)
+        private set
 
     private val maxDistance = 300f
     private val authRepository = AuthRepository()
@@ -66,7 +76,8 @@ class SyncleViewModel : ViewModel() {
             onParticipantDisconnected = { id -> remotePeers.removeAll { it.id == id } },
             onVideoTrackSubscribed = { id, track -> updatePeerVideoTrack(id, track) },
             onActiveSpeakersChanged = { speakers -> updateActiveSpeakers(speakers) },
-            onParticipantAttributesChanged = { id, attrs -> updateParticipantAttributes(id, attrs) }
+            onParticipantAttributesChanged = { id, attrs -> updateParticipantAttributes(id, attrs) },
+            onConnectionQualityChanged = { id, quality -> updateConnectionQuality(id, quality) }
         )
 
         viewModelScope.launch {
@@ -90,22 +101,70 @@ class SyncleViewModel : ViewModel() {
         syncJob = viewModelScope.launch {
             while (isActive) {
                 broadcastPosition()
-                liveKitService?.updateSpatialAudio(remotePeers, avatarState, mapConfig, maxDistance)
-                checkMeetingRoomStatus(mapConfig)
+                syncTableMeetingPresence(mapConfig)
+                liveKitService?.updateSpatialAudio(
+                    remotePeers,
+                    avatarState,
+                    mapConfig,
+                    maxDistance,
+                    resolveLocalAcousticTable(mapConfig)
+                )
                 delay(50)
             }
         }
     }
 
-    private fun checkMeetingRoomStatus(mapConfig: MapConfig) {
-        val currentArea = mapConfig.privateAreas.find { it.rect.contains(avatarState.position) }
-        val currentlyInMeetingRoom = currentArea != null
-        
-        if (currentlyInMeetingRoom != inMeetingRoom) {
-            inMeetingRoom = currentlyInMeetingRoom
-            liveKitService?.setCameraEnabled(currentlyInMeetingRoom)
+    /** Table zone used for audio isolation (meeting UI or standing at table). */
+    fun resolveLocalAcousticTable(mapConfig: MapConfig): String? {
+        return activeTableMeetingId
+            ?: TablePresence.nearestTableId(avatarState.position, mapConfig)
+    }
+
+    private fun syncTableMeetingPresence(mapConfig: MapConfig) {
+        val active = activeTableMeetingId ?: return
+        val atTable = TablePresence.nearestTableId(avatarState.position, mapConfig)
+        if (atTable != active) {
+            leaveTableMeeting()
         }
     }
+
+    fun joinTableMeeting(tableId: String) {
+        if (avatarState.nearbyItemId != tableId) return
+        activeTableMeetingId = tableId
+        meetingCameraEnabled = true
+        liveKitService?.setLocalAttributes(mapOf(TablePresence.ATTR_TABLE_ID to tableId))
+        liveKitService?.setCameraEnabled(true)
+    }
+
+    fun leaveTableMeeting() {
+        activeTableMeetingId = null
+        meetingCameraEnabled = false
+        liveKitService?.setLocalAttributes(mapOf(TablePresence.ATTR_TABLE_ID to ""))
+        liveKitService?.setCameraEnabled(false)
+    }
+
+    fun toggleMeetingMic() {
+        meetingMicEnabled = !meetingMicEnabled
+        liveKitService?.setMicrophoneEnabled(meetingMicEnabled)
+    }
+
+    fun toggleMeetingCamera() {
+        meetingCameraEnabled = !meetingCameraEnabled
+        liveKitService?.setCameraEnabled(meetingCameraEnabled)
+    }
+
+    fun tableMeetingPeers(mapConfig: MapConfig): List<RemotePeer> {
+        val tableId = activeTableMeetingId ?: return emptyList()
+        return remotePeers.filter { peer ->
+            TablePresence.effectiveTableMeetingId(peer.tableMeetingId, peer.position, mapConfig) == tableId
+        }
+    }
+
+    fun tableDisplayName(tableId: String, mapConfig: MapConfig): String {
+        return mapConfig.tables.find { it.id == tableId }?.displayName ?: tableId
+    }
+
+    fun liveKitLocalIdentity(): String? = liveKitService?.getLocalIdentity()
 
     private fun startInterpolationLoop() {
         lerpJob = viewModelScope.launch {
@@ -175,10 +234,22 @@ class SyncleViewModel : ViewModel() {
     }
 
     private fun updateParticipantAttributes(id: String, attributes: Map<String, String>) {
+        val peer = remotePeers.find { it.id == id } ?: return
         val statusStr = attributes["status"]
         if (statusStr != null) {
-            val status = try { UserStatus.valueOf(statusStr) } catch(e: Exception) { UserStatus.AVAILABLE }
-            remotePeers.find { it.id == id }?.status = status
+            peer.status = try { UserStatus.valueOf(statusStr) } catch (e: Exception) { UserStatus.AVAILABLE }
+        }
+        if (attributes.containsKey(TablePresence.ATTR_TABLE_ID)) {
+            peer.tableMeetingId = attributes[TablePresence.ATTR_TABLE_ID]?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    private fun updateConnectionQuality(id: String, quality: ConnectionQuality) {
+        val localIdentity = liveKitService?.getLocalIdentity()
+        if (id == localIdentity) {
+            avatarState.connectionQuality = quality
+        } else {
+            remotePeers.find { it.id == id }?.connectionQuality = quality
         }
     }
 
@@ -192,7 +263,8 @@ class SyncleViewModel : ViewModel() {
         lerpJob?.cancel()
         liveKitService?.disconnect()
         liveKitService = null
-        inMeetingRoom = false
+        activeTableMeetingId = null
+        meetingCameraEnabled = false
         connectionStatus = ConnectionStatus.DISCONNECTED
     }
 
@@ -206,25 +278,27 @@ class SyncleViewModel : ViewModel() {
             localAvatar: AvatarState,
             peer: RemotePeer,
             mapConfig: MapConfig,
-            maxDistance: Float
+            maxDistance: Float,
+            localTableMeetingId: String?
         ): Float {
             if (peer.isSpotlighted) return 1.0f
             if (localAvatar.status == UserStatus.QUIET_MODE || peer.status == UserStatus.QUIET_MODE) return 0.0f
 
-            val localPos = localAvatar.position
-            val localArea = mapConfig.privateAreas.find { it.rect.contains(localPos) }
-            val peerPos = peer.position
-            val peerArea = mapConfig.privateAreas.find { it.rect.contains(peerPos) }
+            val peerTable = TablePresence.effectiveTableMeetingId(
+                peer.tableMeetingId,
+                peer.position,
+                mapConfig
+            )
 
-            return when {
-                localArea != null && localArea == peerArea -> 1.0f
-                localArea != peerArea && (localArea != null || peerArea != null) -> 0.0f
-                else -> {
-                    val distance = (localPos - peerPos).getDistance()
-                    if (distance > maxDistance) 0.0f
-                    else (1.0f - (distance / maxDistance)).coerceIn(0.0f, 1.0f)
-                }
+            if (localTableMeetingId != null) {
+                return if (peerTable == localTableMeetingId) 1.0f else 0.0f
             }
+
+            if (peerTable != null) return 0.0f
+
+            val distance = (localAvatar.position - peer.position).getDistance()
+            if (distance > maxDistance) return 0.0f
+            return (1.0f - (distance / maxDistance)).coerceIn(0.0f, 1.0f)
         }
     }
 }

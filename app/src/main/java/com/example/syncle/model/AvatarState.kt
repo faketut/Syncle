@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import io.livekit.android.room.participant.ConnectionQuality
 
 class AvatarState(
     initialPosition: Offset = Offset.Zero,
@@ -18,6 +19,7 @@ class AvatarState(
     var isSpotlighted by mutableStateOf(false)
     var status by mutableStateOf(UserStatus.AVAILABLE)
     var isSpeaking by mutableStateOf(false)
+    var connectionQuality by mutableStateOf(ConnectionQuality.UNKNOWN)
 
     /**
      * Attempts to move the avatar by [delta].

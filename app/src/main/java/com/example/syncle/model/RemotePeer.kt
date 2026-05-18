@@ -4,6 +4,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
+import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.track.VideoTrack
 
 class RemotePeer(
@@ -24,6 +25,10 @@ class RemotePeer(
     var isSpotlighted by mutableStateOf(false)
     var status by mutableStateOf(UserStatus.AVAILABLE)
     var isSpeaking by mutableStateOf(false)
+    var connectionQuality by mutableStateOf(ConnectionQuality.UNKNOWN)
+
+    /** Declared via LiveKit participant attribute when in a table meeting */
+    var tableMeetingId by mutableStateOf<String?>(null)
 
     // Sync sequence to handle out-of-order packets
     var lastSequence: Long = -1

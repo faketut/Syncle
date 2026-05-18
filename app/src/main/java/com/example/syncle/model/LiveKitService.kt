@@ -5,6 +5,7 @@ import io.livekit.android.LiveKit
 import io.livekit.android.RoomOptions
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
+import io.livekit.android.room.participant.ConnectionQuality
 import io.livekit.android.room.track.DataPublishReliability
 import io.livekit.android.room.track.RemoteAudioTrack
 import io.livekit.android.room.track.RemoteVideoTrack
@@ -21,7 +22,8 @@ class LiveKitService(
     private val onParticipantDisconnected: (String) -> Unit,
     private val onVideoTrackSubscribed: (String, VideoTrack) -> Unit,
     private val onActiveSpeakersChanged: (List<String>) -> Unit,
-    private val onParticipantAttributesChanged: (String, Map<String, String>) -> Unit
+    private val onParticipantAttributesChanged: (String, Map<String, String>) -> Unit,
+    private val onConnectionQualityChanged: (String, ConnectionQuality) -> Unit
 ) {
     private var room: Room? = null
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -78,6 +80,10 @@ class LiveKitService(
                         val identity = event.participant.identity?.value ?: return@collect
                         onParticipantAttributesChanged(identity, event.attributes)
                     }
+                    is io.livekit.android.events.RoomEvent.ConnectionQualityChanged -> {
+                        val identity = event.participant.identity?.value ?: return@collect
+                        onConnectionQualityChanged(identity, event.quality)
+                    }
                     else -> {}
                 }
             }
@@ -102,11 +108,18 @@ class LiveKitService(
         remotePeers: List<RemotePeer>,
         localAvatar: AvatarState,
         mapConfig: MapConfig,
-        maxDistance: Float
+        maxDistance: Float,
+        localTableMeetingId: String?
     ) {
         val currentRoom = room ?: return
         remotePeers.forEach { peer ->
-            val volume = SyncleViewModel.calculateVolume(localAvatar, peer, mapConfig, maxDistance)
+            val volume = SyncleViewModel.calculateVolume(
+                localAvatar,
+                peer,
+                mapConfig,
+                maxDistance,
+                localTableMeetingId
+            )
             val participant = currentRoom.remoteParticipants.values.find { it.identity?.value == peer.id }
             participant?.let { p ->
                 p.audioTracks.values.forEach { publication ->
@@ -129,6 +142,16 @@ class LiveKitService(
         serviceScope.launch {
             try {
                 room?.localParticipant?.setCameraEnabled(enabled)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    fun setMicrophoneEnabled(enabled: Boolean) {
+        serviceScope.launch {
+            try {
+                room?.localParticipant?.setMicrophoneEnabled(enabled)
             } catch (e: Exception) {
                 e.printStackTrace()
             }
