@@ -23,7 +23,7 @@ import com.example.syncle.ui.SyncleScreen
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val mapConfig = try {
             val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
             MapRepository().parseJsonConfig(jsonString)
@@ -71,18 +71,22 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         }
     )
 
-    // Auto check and request permissions on launch
+    // Check / request permissions on launch
     LaunchedEffect(Unit) {
         val audioCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
         val cameraCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
-        if (audioCheck == android.content.pm.PackageManager.PERMISSION_GRANTED && cameraCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+        if (audioCheck == android.content.pm.PackageManager.PERMISSION_GRANTED &&
+            cameraCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
             permissionsGranted = true
             permissionCheckDone = true
         } else {
-            permissionLauncher.launch(arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA))
+            permissionLauncher.launch(
+                arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+            )
         }
     }
 
+    // Waiting for permission dialog result
     if (!permissionCheckDone) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -90,7 +94,8 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         return
     }
 
-    if (!permissionsGranted && !viewModel.offlineMode) {
+    // Permissions denied — hard stop, no offline fallback
+    if (!permissionsGranted) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
@@ -102,18 +107,18 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
             Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = { permissionLauncher.launch(arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)) }) {
+            Button(onClick = {
+                permissionLauncher.launch(
+                    arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+                )
+            }) {
                 Text("授予权限")
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            TextButton(onClick = { viewModel.offlineMode = true }) {
-                Text("离线模式 (预览)")
             }
         }
         return
     }
 
-    // Auto-fetch connection details on launch
+    // Auto-fetch Sandbox token on every launch
     LaunchedEffect(Unit) {
         viewModel.autoFetchSandboxDetails()
     }
@@ -128,7 +133,8 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         return
     }
 
-    if (!viewModel.offlineMode && status != ConnectionStatus.CONNECTED) {
+    if (status != ConnectionStatus.CONNECTED) {
+        // ── Connection / Login Screen ─────────────────────────────────────────
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -180,22 +186,16 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
                 ) {
                     Text("Join Room")
                 }
-                
-                TextButton(
-                    onClick = { viewModel.offlineMode = true },
-                    modifier = Modifier.padding(top = 16.dp)
-                ) {
-                    Text("Offline Mode (Preview Only)")
-                }
             }
         }
     } else {
+        // ── Spatial Canvas (connected) ────────────────────────────────────────
         SyncleScreen(
             mapConfig = mapConfig,
             avatarState = viewModel.avatarState,
             remotePeers = viewModel.remotePeers,
             onJoinRoom = { roomId ->
-                // TODO: disconnect from lobby room, reconnect to table's private room
+                // TODO: disconnect from lobby, reconnect to table's private room
                 android.util.Log.i("SyncleNav", "Joining meeting room: $roomId")
             }
         )

@@ -20,7 +20,6 @@ class SyncleViewModel : ViewModel() {
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
 
-    var offlineMode by mutableStateOf(false)
     var url by mutableStateOf("")
     var token by mutableStateOf("")
     var isAutoFetching by mutableStateOf(false)
@@ -34,7 +33,7 @@ class SyncleViewModel : ViewModel() {
     private val authRepository = AuthRepository()
 
     fun autoFetchSandboxDetails() {
-        if (url.isNotEmpty() || token.isNotEmpty() || isAutoFetching) return
+        if (isAutoFetching) return
         viewModelScope.launch {
             isAutoFetching = true
             try {
