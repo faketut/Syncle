@@ -42,3 +42,6 @@ google-services.json
 # Temporary files / Scratch
 scratch/
 *.tmp
+.vscode
+
+
