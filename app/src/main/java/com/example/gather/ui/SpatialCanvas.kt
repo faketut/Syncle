@@ -72,17 +72,23 @@ fun SpatialCanvas(
         val bgWidth = backgroundBitmap.width.toFloat()
         val bgHeight = backgroundBitmap.height.toFloat()
 
-        // 1. 计算等比缩放铺满基准比例 (确保地图放大到完全铺满屏幕，绝无黑边)
+        // 1. 计算等比缩放铺满基准比例，并在此基础上略微放大 1.35 倍
+        // 确保不仅能完全铺满屏幕无黑边，且在上下左右方向上均有广阔空间展现“中央漫步背景动，尽头锁死化身行”的殿堂级动效
         val scaleX = viewportWidth / bgWidth
         val scaleY = viewportHeight / bgHeight
-        val scale = maxOf(scaleX, scaleY)
+        val baseScale = maxOf(scaleX, scaleY)
+        val scale = baseScale * 1.35f
         scaleState = scale
 
-        // 2. 核心 RPG 视角算法：将本地玩家化身的大世界缩放坐标死死锁定在屏幕正中央
+        val mapWidth = bgWidth * scale
+        val mapHeight = bgHeight * scale
+
+        // 2. 核心动态相机追踪与平滑边缘钳制算法 (Dynamic Camera Tracking with Edge Clamping)
+        // 平时人物在屏幕中央，背景移动；当背景边缘快要进入屏幕 (即快漏底) 时，锁死背景，改为人物自己在屏幕上移动
         val avatarWorldX = avatarState.position.x * scale
         val avatarWorldY = avatarState.position.y * scale
-        val cameraX = avatarWorldX - viewportWidth / 2f
-        val cameraY = avatarWorldY - viewportHeight / 2f
+        val cameraX = (avatarWorldX - viewportWidth / 2f).coerceIn(0f, maxOf(0f, mapWidth - viewportWidth))
+        val cameraY = (avatarWorldY - viewportHeight / 2f).coerceIn(0f, maxOf(0f, mapHeight - viewportHeight))
         val cameraOffset = Offset(cameraX, cameraY)
         cameraOffsetState = cameraOffset
 
@@ -91,7 +97,7 @@ fun SpatialCanvas(
             translate(left = -cameraOffset.x, top = -cameraOffset.y)
             scale(scaleX = scale, scaleY = scale, pivot = Offset.Zero)
         }) {
-            // 1. Draw Background Image (贴图原生分辨率绘制，GPU自动等比放大并随移动反向平移)
+            // 1. Draw Background Image (贴图原生分辨率绘制，GPU自动等比放大并随移动平移/锁死)
             drawImage(
                 image = backgroundBitmap,
                 dstOffset = IntOffset.Zero,
@@ -254,7 +260,7 @@ fun SpatialCanvas(
                 )
             }
 
-            // 5. Draw Local Avatar (本地玩家化身 - 永远死死固定在屏幕正中央！)
+            // 5. Draw Local Avatar (本地玩家化身 - 平时居中背景动，尽头锁死化身行！)
             val localCenter = avatarState.position
             val localRadius = avatarState.radius
 
