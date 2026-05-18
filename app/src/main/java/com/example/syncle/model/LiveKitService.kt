@@ -125,6 +125,16 @@ class LiveKitService(
         room?.localParticipant?.setAttributes(attributes)
     }
 
+    fun setCameraEnabled(enabled: Boolean) {
+        serviceScope.launch {
+            try {
+                room?.localParticipant?.setCameraEnabled(enabled)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun disconnect() {
         try {
             serviceScope.cancel()

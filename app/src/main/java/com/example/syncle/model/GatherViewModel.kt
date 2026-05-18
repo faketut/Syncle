@@ -28,6 +28,7 @@ class SyncleViewModel : ViewModel() {
     private var liveKitService: LiveKitService? = null
     private var syncJob: Job? = null
     private var lerpJob: Job? = null
+    private var inMeetingRoom = false
 
     private val maxDistance = 300f
     private val authRepository = AuthRepository()
@@ -90,8 +91,19 @@ class SyncleViewModel : ViewModel() {
             while (isActive) {
                 broadcastPosition()
                 liveKitService?.updateSpatialAudio(remotePeers, avatarState, mapConfig, maxDistance)
+                checkMeetingRoomStatus(mapConfig)
                 delay(50)
             }
+        }
+    }
+
+    private fun checkMeetingRoomStatus(mapConfig: MapConfig) {
+        val currentArea = mapConfig.privateAreas.find { it.rect.contains(avatarState.position) }
+        val currentlyInMeetingRoom = currentArea != null
+        
+        if (currentlyInMeetingRoom != inMeetingRoom) {
+            inMeetingRoom = currentlyInMeetingRoom
+            liveKitService?.setCameraEnabled(currentlyInMeetingRoom)
         }
     }
 
@@ -180,6 +192,7 @@ class SyncleViewModel : ViewModel() {
         lerpJob?.cancel()
         liveKitService?.disconnect()
         liveKitService = null
+        inMeetingRoom = false
         connectionStatus = ConnectionStatus.DISCONNECTED
     }
 
