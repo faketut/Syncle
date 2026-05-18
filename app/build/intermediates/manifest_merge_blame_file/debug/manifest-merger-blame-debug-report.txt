@@ -9,45 +9,45 @@
 9        android:targetSdkVersion="34" />
 10
 11    <uses-permission android:name="android.permission.INTERNET" />
-11-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:3:5-67
-11-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:3:22-64
+11-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:3:5-67
+11-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:3:22-64
 12    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-12-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:4:5-79
-12-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:4:22-76
+12-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:4:5-79
+12-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:4:22-76
 13    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-13-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:5:5-76
-13-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:5:22-73
+13-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:5:5-76
+13-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:5:22-73
 14    <uses-permission android:name="android.permission.RECORD_AUDIO" />
-14-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:6:5-71
-14-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:6:22-68
+14-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:6:5-71
+14-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:6:22-68
 15    <uses-permission android:name="android.permission.CAMERA" />
-15-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:7:5-65
-15-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:7:22-62
+15-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:7:5-65
+15-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:7:22-62
 16    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-16-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:8:5-80
-16-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:8:22-77
+16-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:8:5-80
+16-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:8:22-77
 17    <uses-permission
-17-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:9:5-95
+17-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:9:5-95
 18        android:name="android.permission.BLUETOOTH"
-18-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:9:22-65
+18-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:9:22-65
 19        android:maxSdkVersion="30" />
-19-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:9:66-92
+19-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:9:66-92
 20    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-20-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:10:5-76
-20-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:10:22-73
+20-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:10:5-76
+20-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:10:22-73
 21
 22    <uses-feature
-22-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:12:5-85
+22-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:12:5-85
 23        android:name="android.hardware.camera"
-23-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:12:19-57
+23-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:12:19-57
 24        android:required="false" />
-24-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:12:58-82
+24-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:12:58-82
 25    <uses-feature
-25-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:13:5-95
+25-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:13:5-95
 26        android:name="android.hardware.camera.autofocus"
-26-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:13:19-67
+26-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:13:19-67
 27        android:required="false" />
-27-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:13:68-92
+27-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:13:68-92
 28
 29    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
 29-->[io.livekit:livekit-android:2.25.2] C:\Users\jian\.gradle\caches\8.9\transforms\197c69700ad462ae934b869a4ddd426f\transformed\jetified-livekit-android-2.25.2\AndroidManifest.xml:26:5-77
@@ -68,50 +68,50 @@
 36-->[androidx.core:core:1.13.1] C:\Users\jian\.gradle\caches\8.9\transforms\4662b8e118bf2633f8abd8c39b6ed1ef\transformed\core-1.13.1\AndroidManifest.xml:26:22-94
 37
 38    <application
-38-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:15:5-35:19
+38-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:15:5-35:19
 39        android:allowBackup="true"
-39-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:16:9-35
+39-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:16:9-35
 40        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
 40-->[androidx.core:core:1.13.1] C:\Users\jian\.gradle\caches\8.9\transforms\4662b8e118bf2633f8abd8c39b6ed1ef\transformed\core-1.13.1\AndroidManifest.xml:28:18-86
 41        android:debuggable="true"
 42        android:extractNativeLibs="true"
-42-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:20:9-41
+42-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:20:9-41
 43        android:label="@string/app_name"
-43-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:17:9-41
+43-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:17:9-41
 44        android:supportsRtl="true"
-44-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:19:9-35
+44-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:19:9-35
 45        android:theme="@style/Theme.Syncle" >
-45-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:18:9-44
+45-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:18:9-44
 46
 47        <!-- 显式声明 Android 15 16KB 内存页大小兼容模式 -->
 48        <property
-48-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:23:9-90
+48-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:23:9-90
 49            android:name="android.app.PROPERTY_16KB_COMPAT"
-49-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:23:19-66
+49-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:23:19-66
 50            android:value="true" />
-50-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:23:67-87
+50-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:23:67-87
 51        <property
-51-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:23:9-90
+51-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:23:9-90
 52            android:name="android.window.PROPERTY_COMPAT_ALLOW_PAGE_SIZE_COMPAT"
-52-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:23:19-66
+52-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:23:19-66
 53            android:value="true" />
-53-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:23:67-87
+53-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:23:67-87
 54
 55        <activity
-55-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:26:9-33:20
+55-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:26:9-33:20
 56            android:name="com.example.syncle.MainActivity"
-56-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:27:13-41
+56-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:27:13-41
 57            android:exported="true" >
-57-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:28:13-36
+57-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:28:13-36
 58            <intent-filter>
-58-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:29:13-32:29
+58-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:29:13-32:29
 59                <action android:name="android.intent.action.MAIN" />
-59-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:30:17-69
-59-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:30:25-66
+59-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:30:17-69
+59-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:30:25-66
 60
 61                <category android:name="android.intent.category.LAUNCHER" />
-61-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:31:17-77
-61-->D:\Downloads\code\gather\app\src\main\AndroidManifest.xml:31:27-74
+61-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:31:17-77
+61-->D:\Downloads\code\syncle \app\src\main\AndroidManifest.xml:31:27-74
 62            </intent-filter>
 63        </activity>
 64

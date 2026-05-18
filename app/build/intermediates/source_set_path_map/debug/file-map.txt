@@ -38,9 +38,9 @@ com.example.syncle.app-jetified-ui-tooling-data-1.4.0-36 C:\Users\jian\.gradle\c
 com.example.syncle.app-jetified-activity-ktx-1.7.2-37 C:\Users\jian\.gradle\caches\8.9\transforms\dbd91a8a7d218f6b9fd35f8fba757c03\transformed\jetified-activity-ktx-1.7.2\res
 com.example.syncle.app-jetified-activity-compose-1.7.2-38 C:\Users\jian\.gradle\caches\8.9\transforms\e3b4c10f56225b1f3b34612b590591ce\transformed\jetified-activity-compose-1.7.2\res
 com.example.syncle.app-jetified-customview-poolingcontainer-1.0.0-39 C:\Users\jian\.gradle\caches\8.9\transforms\f0380ce693529f3dcbaf85ef51923924\transformed\jetified-customview-poolingcontainer-1.0.0\res
-com.example.syncle.app-resValues-40 D:\Downloads\code\gather\app\build\generated\res\resValues\debug
-com.example.syncle.app-packageDebugResources-41 D:\Downloads\code\gather\app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
-com.example.syncle.app-packageDebugResources-42 D:\Downloads\code\gather\app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
-com.example.syncle.app-merged_res-43 D:\Downloads\code\gather\app\build\intermediates\merged_res\debug
-com.example.syncle.app-debug-44 D:\Downloads\code\gather\app\src\debug\res
-com.example.syncle.app-main-45 D:\Downloads\code\gather\app\src\main\res
+com.example.syncle.app-resValues-40 D:\Downloads\code\syncle \app\build\generated\res\resValues\debug
+com.example.syncle.app-packageDebugResources-41 D:\Downloads\code\syncle \app\build\intermediates\incremental\debug\packageDebugResources\merged.dir
+com.example.syncle.app-packageDebugResources-42 D:\Downloads\code\syncle \app\build\intermediates\incremental\debug\packageDebugResources\stripped.dir
+com.example.syncle.app-merged_res-43 D:\Downloads\code\syncle \app\build\intermediates\merged_res\debug
+com.example.syncle.app-debug-44 D:\Downloads\code\syncle \app\src\debug\res
+com.example.syncle.app-main-45 D:\Downloads\code\syncle \app\src\main\res
