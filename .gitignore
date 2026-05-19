@@ -2,4 +2,11 @@ build/
 .gradle/
 .idea/
 .vscode/
-gradle/
+
+# Local machine & secrets
+local.properties
+
+# JVM diagnostics (never commit)
+*.hprof
+hs_err_pid*.log
+replay_pid*.log
