@@ -7,6 +7,10 @@ build/
 local.properties
 
 # JVM diagnostics (never commit)
-*.hprof
-hs_err_pid*.log
-replay_pid*.log
+
+
+AGENTS.md
+prd.md
+handoff.md
+last-session-diff.md
+
