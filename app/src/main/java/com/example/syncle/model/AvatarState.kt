@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import com.example.syncle.domain.MapConfigCache
 import io.livekit.android.room.participant.ConnectionQuality
 
 class AvatarState(
@@ -26,25 +27,26 @@ class AvatarState(
      * Implements sliding collision: if a diagonal move fails, it tries to move along X or Y axis independently.
      * Returns true if any movement occurred.
      */
-    fun move(delta: Offset, mapConfig: MapConfig): Boolean {
+    fun move(delta: Offset, mapCache: MapConfigCache): Boolean {
+        val mapConfig = mapCache.config
         // 1. Try full movement
         if (tryMoveTo(position + delta, mapConfig)) {
             position += delta
-            updateNearbyItem(mapConfig)
+            updateNearbyItem(mapCache)
             return true
         }
 
         // 2. Try sliding - X axis only
         if (delta.x != 0f && tryMoveTo(position + Offset(delta.x, 0f), mapConfig)) {
             position += Offset(delta.x, 0f)
-            updateNearbyItem(mapConfig)
+            updateNearbyItem(mapCache)
             return true
         }
 
         // 3. Try sliding - Y axis only
         if (delta.y != 0f && tryMoveTo(position + Offset(0f, delta.y), mapConfig)) {
             position += Offset(0f, delta.y)
-            updateNearbyItem(mapConfig)
+            updateNearbyItem(mapCache)
             return true
         }
 
@@ -53,26 +55,24 @@ class AvatarState(
 
     private fun tryMoveTo(newPosition: Offset, mapConfig: MapConfig): Boolean {
         val avatarRect = Rect(
-            center = newPosition,
-            radius = radius
+            left = newPosition.x - radius,
+            top = newPosition.y - radius,
+            right = newPosition.x + radius,
+            bottom = newPosition.y + radius
         )
 
-        // Must be within at least one walkable area
-        val isInsideWalkable = mapConfig.walkableAreas.any { it.contains(newPosition) }
-        
-        // Must NOT collide with any tables
-        val collidesWithTable = mapConfig.tables.any { it.rect.overlaps(avatarRect) }
+        val isInsideWalkable = mapConfig.walkableAreas.any { walkable ->
+            walkable.contains(newPosition) || walkable.overlaps(avatarRect)
+        }
+
+        val collidesWithTable = mapConfig.tables.any { table ->
+            avatarRect.overlaps(table.rect)
+        }
 
         return isInsideWalkable && !collidesWithTable
     }
 
-    private fun updateNearbyItem(mapConfig: MapConfig) {
-        val interactionThreshold = 60f
-        val closest = mapConfig.tables.firstOrNull { table ->
-            // Simple distance check from center to rect
-            val dist = (position - table.rect.center).getDistance()
-            dist < interactionThreshold
-        }
-        nearbyItemId = closest?.id
+    private fun updateNearbyItem(mapCache: MapConfigCache) {
+        nearbyItemId = mapCache.nearestTableId(position)
     }
 }

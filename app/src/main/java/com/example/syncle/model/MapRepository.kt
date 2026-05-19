@@ -34,28 +34,12 @@ class MapRepository {
                         obj.getDouble("y").toFloat(),
                         obj.getDouble("width").toFloat(),
                         obj.getDouble("height").toFloat()
-                    )
+                    ),
+                    displayName = obj.optString("display_name", obj.getString("id"))
                 )
             )
         }
 
-        val privateAreas = mutableListOf<PrivateArea>()
-        val privateJson = root.optJSONArray("private_areas") ?: org.json.JSONArray()
-        for (i in 0 until privateJson.length()) {
-            val obj = privateJson.getJSONObject(i)
-            privateAreas.add(
-                PrivateArea(
-                    id = obj.getString("id"),
-                    rect = createRect(
-                        obj.getDouble("x").toFloat(),
-                        obj.getDouble("y").toFloat(),
-                        obj.getDouble("width").toFloat(),
-                        obj.getDouble("height").toFloat()
-                    )
-                )
-            )
-        }
-        
         val collisionObj = root.getJSONObject("collision_settings")
         val collisionSettings = CollisionSettings(
             type = collisionObj.getString("type"),
@@ -67,7 +51,6 @@ class MapRepository {
             backgroundImage = root.getString("background_image"),
             walkableAreas = walkableAreas,
             tables = tables,
-            privateAreas = privateAreas,
             collisionSettings = collisionSettings
         )
     }

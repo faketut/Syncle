@@ -10,36 +10,45 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import kotlin.OptIn
 import com.example.syncle.model.*
-import com.example.syncle.ui.SyncleScreen
+import com.example.syncle.ui.SyncleScreenHost
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val mapConfig = try {
-            val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
-            MapRepository().parseJsonConfig(jsonString)
-        } catch (e: Exception) {
-            e.printStackTrace()
-            MapConfig(
-                mapName = "Office Blueprint (Fallback)",
-                backgroundImage = "room1.png",
-                walkableAreas = listOf(Rect(0f, 0f, 2000f, 2000f)),
-                tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), roomId = "room-table-1")),
-                privateAreas = listOf(PrivateArea("meeting_room", Rect(600f, 100f, 900f, 400f))),
-                collisionSettings = CollisionSettings("AABB", true)
-            )
-        }
-
         val viewModel = ViewModelProvider(this)[SyncleViewModel::class.java]
+
+        lifecycleScope.launch {
+            val config = withContext(Dispatchers.IO) {
+                try {
+                    val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
+                    MapRepository().parseJsonConfig(jsonString)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    MapConfig(
+                        mapName = "Office Blueprint (Fallback)",
+                        backgroundImage = "room1.jpg",
+                        walkableAreas = listOf(Rect(0f, 0f, 2000f, 2000f)),
+                        tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), displayName = "Table 1")),
+                        collisionSettings = CollisionSettings("AABB", true)
+                    )
+                }
+            }
+            viewModel.setMapConfig(config)
+        }
 
         setContent {
             MaterialTheme {
@@ -47,7 +56,7 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    SyncleApp(mapConfig, viewModel)
+                    SyncleApp(viewModel)
                 }
             }
         }
@@ -56,8 +65,11 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+fun SyncleApp(viewModel: SyncleViewModel) {
+    val context = LocalContext.current
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val mapConfig = viewModel.getMapConfig()
+
     var permissionsGranted by remember { mutableStateOf(false) }
     var permissionCheckDone by remember { mutableStateOf(false) }
 
@@ -71,7 +83,6 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         }
     )
 
-    // Check / request permissions on launch
     LaunchedEffect(Unit) {
         val audioCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
         val cameraCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
@@ -86,7 +97,6 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         }
     }
 
-    // Waiting for permission dialog result
     if (!permissionCheckDone) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
@@ -94,7 +104,6 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         return
     }
 
-    // Permissions denied — hard stop, no offline fallback
     if (!permissionsGranted) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -118,23 +127,26 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
         return
     }
 
-    // Auto-fetch Sandbox token on every launch
     LaunchedEffect(Unit) {
         viewModel.autoFetchSandboxDetails()
     }
 
-    val status = viewModel.connectionStatus
-    val startupError = viewModel.startupError
-
-    if (startupError != null) {
+    if (!uiState.mapReady || mapConfig == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Critical Error: $startupError", color = MaterialTheme.colorScheme.error)
+            CircularProgressIndicator()
         }
         return
     }
 
-    if (status != ConnectionStatus.CONNECTED) {
-        // ── Connection / Login Screen ─────────────────────────────────────────
+    val connection = uiState.connection
+    if (connection.startupError != null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("Critical Error: ${connection.startupError}", color = MaterialTheme.colorScheme.error)
+        }
+        return
+    }
+
+    if (connection.status != ConnectionStatus.CONNECTED) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -148,12 +160,12 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
                 modifier = Modifier.padding(bottom = 32.dp)
             )
 
-            if (status == ConnectionStatus.CONNECTING || viewModel.isAutoFetching) {
+            if (connection.status == ConnectionStatus.CONNECTING || connection.isAutoFetching) {
                 CircularProgressIndicator(modifier = Modifier.padding(bottom = 16.dp))
-                Text(if (viewModel.isAutoFetching) "Fetching Sandbox Token..." else "Connecting to LiveKit...")
+                Text(if (connection.isAutoFetching) "Fetching Sandbox Token..." else "Connecting to LiveKit...")
             } else {
                 OutlinedTextField(
-                    value = viewModel.url,
+                    value = connection.url,
                     onValueChange = { viewModel.url = it },
                     label = { Text("LiveKit Server URL") },
                     modifier = Modifier.fillMaxWidth()
@@ -162,16 +174,17 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 OutlinedTextField(
-                    value = viewModel.token,
+                    value = connection.token,
                     onValueChange = { viewModel.token = it },
                     label = { Text("Access Token") },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Paste JWT Token here...") }
                 )
 
-                if (status == ConnectionStatus.ERROR) {
+                if (connection.status == ConnectionStatus.ERROR) {
                     Text(
-                        text = "Connection Failed. Check URL/Token or Server status.",
+                        text = connection.lastConnectError
+                            ?: "Connection failed. Check URL/token or server status.",
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.padding(top = 8.dp)
                     )
@@ -180,25 +193,18 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
                 Spacer(modifier = Modifier.height(32.dp))
 
                 Button(
-                    onClick = { if (viewModel.token.isNotEmpty()) viewModel.connect(context, mapConfig) },
+                    onClick = {
+                        if (connection.token.isNotEmpty()) viewModel.connect(context)
+                    },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
-                    enabled = viewModel.token.isNotEmpty()
+                    enabled = connection.token.isNotEmpty()
                 ) {
                     Text("Join Room")
                 }
             }
         }
     } else {
-        // ── Spatial Canvas (connected) ────────────────────────────────────────
-        SyncleScreen(
-            mapConfig = mapConfig,
-            avatarState = viewModel.avatarState,
-            remotePeers = viewModel.remotePeers,
-            onJoinRoom = { roomId ->
-                // TODO: disconnect from lobby, reconnect to table's private room
-                android.util.Log.i("SyncleNav", "Joining meeting room: $roomId")
-            }
-        )
+        SyncleScreenHost(mapConfig = mapConfig, viewModel = viewModel)
     }
 }
 
@@ -207,10 +213,9 @@ fun SyncleApp(mapConfig: MapConfig, viewModel: SyncleViewModel) {
 fun SynclePreview() {
     val mockMapConfig = MapConfig(
         mapName = "Office Blueprint",
-        backgroundImage = "room1.png",
+        backgroundImage = "room1.jpg",
         walkableAreas = listOf(Rect(0f, 0f, 1000f, 1000f)),
-        tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), roomId = "room-table-1")),
-        privateAreas = listOf(PrivateArea("meeting_room", Rect(600f, 100f, 900f, 400f))),
+        tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), displayName = "Table 1")),
         collisionSettings = CollisionSettings("AABB", true)
     )
 
@@ -219,7 +224,9 @@ fun SynclePreview() {
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background
         ) {
-            SyncleApp(mockMapConfig, SyncleViewModel())
+            val vm = SyncleViewModel()
+            vm.setMapConfig(mockMapConfig)
+            SyncleApp(vm)
         }
     }
 }

@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -15,34 +18,43 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.syncle.model.AvatarState
 import com.example.syncle.model.RemotePeer
-import io.livekit.android.room.track.VideoTrack
+import com.example.syncle.ui.livekit.SyncleVideoRenderer
+import io.livekit.android.room.Room
 
 @Composable
 fun PeerVideoOverlay(
+    room: Room?,
     localAvatar: AvatarState,
     remotePeers: List<RemotePeer>,
     modifier: Modifier = Modifier
 ) {
     val proximityThreshold = 300f
-    val nearbyPeers = remotePeers.filter { peer ->
-        (localAvatar.position - peer.position).getDistance() < proximityThreshold
-        && peer.videoTrack != null // Only show if video is available
+    val localPosition = localAvatar.position
+    val nearbyPeers by remember(remotePeers, localPosition) {
+        derivedStateOf {
+            remotePeers.filter { peer ->
+                (localPosition - peer.position).getDistance() < proximityThreshold &&
+                    peer.videoTrack != null
+            }
+        }
     }
+
+    if (room == null || nearbyPeers.isEmpty()) return
 
     Box(modifier = modifier.fillMaxSize().padding(16.dp)) {
         LazyRow(
             modifier = Modifier.align(Alignment.TopEnd),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            items(nearbyPeers) { peer ->
-                VideoBox(peer)
+            items(nearbyPeers, key = { it.id }) { peer ->
+                VideoBox(room = room, peer = peer)
             }
         }
     }
 }
 
 @Composable
-fun VideoBox(peer: RemotePeer) {
+fun VideoBox(room: Room, peer: RemotePeer) {
     Box(
         modifier = Modifier
             .size(width = 120.dp, height = 160.dp)
@@ -50,25 +62,13 @@ fun VideoBox(peer: RemotePeer) {
             .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.BottomCenter
     ) {
-        // LiveKit Video Renderer Integration
         peer.videoTrack?.let { track ->
-            // In a real LiveKit app:
-            // VideoTrackView(track = track)
-            Text(
-                text = "Live: ${peer.name}",
-                color = Color.Green,
-                fontSize = 12.sp,
-                modifier = Modifier.align(Alignment.Center)
-            )
-        } ?: run {
-            Text(
-                text = "No Video",
-                color = Color.Gray,
-                fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.Center)
+            SyncleVideoRenderer(
+                room = room,
+                videoTrack = track,
+                modifier = Modifier.fillMaxSize()
             )
         }
-
         Text(
             text = peer.name,
             color = Color.White,

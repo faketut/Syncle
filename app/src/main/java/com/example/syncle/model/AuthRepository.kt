@@ -7,6 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import com.example.syncle.domain.SyncleLog
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -29,7 +30,10 @@ class AuthRepository {
     ): ConnectionDetails? = withContext(Dispatchers.IO) {
         try {
             val sandboxId = BuildConfig.LIVEKIT_SANDBOX_ID
-            if (sandboxId.isEmpty()) return@withContext null
+            if (sandboxId.isEmpty()) {
+                SyncleLog.w("LIVEKIT_SANDBOX_ID is empty. Check local.properties: livekit.sandbox_id=...")
+                return@withContext null
+            }
 
             val bodyJson = JSONObject().apply {
                 put("room_name", roomName)
@@ -51,11 +55,15 @@ class AuthRepository {
                         token = json.getString("participantToken")
                     )
                 } else {
+                    val errorBody = try { response.body?.string() } catch (_: Exception) { null }
+                    SyncleLog.w(
+                        "Sandbox token fetch failed: http=${response.code}. body=${errorBody ?: "<empty>"}"
+                    )
                     null
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            SyncleLog.e("fetchSandboxConnectionDetails failed", e)
             null
         }
     }

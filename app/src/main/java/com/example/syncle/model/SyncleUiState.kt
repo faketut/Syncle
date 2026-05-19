@@ -1,0 +1,44 @@
+package com.example.syncle.model
+
+import com.example.syncle.ui.MeetingParticipant
+
+data class LocalAvatarUi(
+    val name: String,
+    val nearbyItemId: String?
+)
+
+data class ConnectionUi(
+    val status: ConnectionStatus,
+    val url: String,
+    val token: String,
+    val isAutoFetching: Boolean,
+    val startupError: String?,
+    val lastConnectError: String? = null
+)
+
+data class MeetingUi(
+    val activeTableId: String?,
+    val tableTitle: String?,
+    val participants: List<MeetingParticipant>,
+    val micEnabled: Boolean,
+    val cameraEnabled: Boolean
+)
+
+data class SyncleUiState(
+    val mapReady: Boolean = false,
+    val connection: ConnectionUi = ConnectionUi(
+        status = ConnectionStatus.DISCONNECTED,
+        url = "",
+        token = "",
+        isAutoFetching = false,
+        startupError = null
+    ),
+    val meeting: MeetingUi = MeetingUi(
+        activeTableId = null,
+        tableTitle = null,
+        participants = emptyList(),
+        micEnabled = true,
+        cameraEnabled = false
+    ),
+    val localAvatar: LocalAvatarUi = LocalAvatarUi(name = "Me", nearbyItemId = null)
+)

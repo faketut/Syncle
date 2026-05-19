@@ -1,188 +1,194 @@
 package com.example.syncle.ui
 
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import com.example.syncle.model.AvatarState
-import com.example.syncle.model.InteractableItem
 import com.example.syncle.model.MapConfig
 import com.example.syncle.model.RemotePeer
-import io.livekit.android.room.participant.ConnectionQuality
+import com.example.syncle.model.TablePresence
+import kotlin.math.roundToInt
+
+private val LocalAvatarColor = Color(0xFF00E5FF)
+private val RemoteAvatarColor = Color(0xFF9E9E9E)
+private val SpeakingHalo = Color(0xFF4CAF50).copy(alpha = 0.45f)
 
 @Composable
 fun SpatialCanvas(
     mapConfig: MapConfig,
+    logicWorldSize: Size,
+    backgroundImage: ImageBitmap?,
     avatarState: AvatarState,
     remotePeers: List<RemotePeer>,
     onMove: (Offset) -> Unit,
-    onJoinRoom: (roomId: String) -> Unit = {},
+    onJoinRoom: (tableId: String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    var offset by remember { mutableStateOf(Offset.Zero) }
-    var scale by remember { mutableStateOf(1f) }
-
-    // Pulsing alpha animation for the highlighted table border
-    val infiniteTransition = rememberInfiniteTransition(label = "highlight_pulse")
-    val highlightAlpha by infiniteTransition.animateFloat(
-        initialValue = 0.6f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse
-        ),
-        label = "highlight_alpha"
-    )
+    val nearbyId = avatarState.nearbyItemId
 
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF1A1A2E)) // dark fallback until background image loads
-            .pointerInput(Unit) {
-                detectTransformGestures { _, pan, zoom, _ ->
-                    scale = (scale * zoom).coerceIn(0.5f, 3f)
-                    offset += pan
-                }
-            }
-            .pointerInput(avatarState.nearbyItemId) {
+            .pointerInput(nearbyId, avatarState.position, logicWorldSize) {
                 detectTapGestures { tapOffset ->
-                    // Convert screen tap → world coordinates
-                    val worldTap = (tapOffset - offset) / scale
+                    val screenSize = Size(size.width.toFloat(), size.height.toFloat())
+                    val viewport = MapCamera.compute(
+                        playerX = avatarState.position.x,
+                        playerY = avatarState.position.y,
+                        screenWidth = screenSize.width,
+                        screenHeight = screenSize.height,
+                        logicWidth = logicWorldSize.width,
+                        logicHeight = logicWorldSize.height
+                    )
+                    val worldTap = MapCamera.screenToWorld(
+                        tapOffset.x,
+                        tapOffset.y,
+                        viewport,
+                        screenSize
+                    )
 
-                    // Check if the tap lands inside the highlighted (nearby) table
-                    val nearbyId = avatarState.nearbyItemId
-                    if (nearbyId != null) {
-                        val tappedTable = mapConfig.tables.firstOrNull { table ->
-                            table.id == nearbyId && table.rect.contains(worldTap)
-                        }
-                        if (tappedTable != null) {
-                            // User explicitly tapped the highlighted table → join its room
-                            onJoinRoom(tappedTable.id)
-                            return@detectTapGestures
-                        }
+                    val joinTableId = TablePresence.tableIdForJoinTap(
+                        avatarState.position,
+                        worldTap,
+                        mapConfig
+                    )
+                    if (joinTableId != null) {
+                        onJoinRoom(joinTableId)
+                        return@detectTapGestures
                     }
 
-                    // Otherwise treat as a movement command
                     val delta = worldTap - avatarState.position
                     onMove(delta)
                 }
             }
     ) {
-        // ── 1. Background ────────────────────────────────────────────────────
-        // TODO: Replace with ImageBitmap drawn via drawImage() once the asset pipeline
-        // provides a real background image.  The dark fill serves as the placeholder.
-        drawRect(
-            color = Color(0xFF1A1A2E),
-            topLeft = offset,
-            size = Size(mapConfig.walkableAreas.fold(0f) { acc, r -> maxOf(acc, r.right) } * scale,
-                        mapConfig.walkableAreas.fold(0f) { acc, r -> maxOf(acc, r.bottom) } * scale)
+        val screenSize = size
+        val viewport = MapCamera.compute(
+            playerX = avatarState.position.x,
+            playerY = avatarState.position.y,
+            screenWidth = screenSize.width,
+            screenHeight = screenSize.height,
+            logicWidth = logicWorldSize.width,
+            logicHeight = logicWorldSize.height
         )
 
-        // ── 2. Collision map is intentionally NOT rendered ───────────────────
-        // walkableAreas and tables are kept in MapConfig for collision and table meetings
-        // solely for physics / AABB collision and spatial-audio calculations.
+        drawBackgroundCover(backgroundImage, viewport, screenSize)
 
-        // ── 3. Highlight border for the nearby / colliding table ─────────────
-        val nearbyId = avatarState.nearbyItemId
-        if (nearbyId != null) {
-            val highlightTable = mapConfig.tables.firstOrNull { it.id == nearbyId }
-            if (highlightTable != null) {
-                val tableScreenTopLeft = Offset(
-                    highlightTable.rect.left * scale + offset.x,
-                    highlightTable.rect.top * scale + offset.y
-                )
-                val tableScreenSize = highlightTable.rect.size * scale
-
-                // Outer glow — slightly expanded translucent rect
-                val glowPad = 6f
-                drawRect(
-                    color = Color(0xFFFFD700).copy(alpha = highlightAlpha * 0.25f),
-                    topLeft = tableScreenTopLeft - Offset(glowPad, glowPad),
-                    size = Size(
-                        tableScreenSize.width + glowPad * 2,
-                        tableScreenSize.height + glowPad * 2
-                    )
-                )
-                // Sharp border
-                drawRect(
-                    color = Color(0xFFFFD700).copy(alpha = highlightAlpha),
-                    topLeft = tableScreenTopLeft,
-                    size = tableScreenSize,
-                    style = Stroke(width = 3f)
-                )
+        avatarState.nearbyItemId?.let { id ->
+            mapConfig.tablesById[id]?.let { table ->
+                drawTableInteractionEdgeHighlight(table.rect, viewport, screenSize)
             }
         }
 
-        // ── 4. Local Avatar ──────────────────────────────────────────────────
-        val localCenter = Offset(
-            avatarState.position.x * scale + offset.x,
-            avatarState.position.y * scale + offset.y
+        val localScreen = MapCamera.worldToScreen(
+            avatarState.position.x,
+            avatarState.position.y,
+            viewport,
+            screenSize
         )
-        if (avatarState.isSpeaking) {
-            drawCircle(
-                color = Color(0xFF4CAF50).copy(alpha = 0.5f),
-                radius = avatarState.radius * scale * 1.5f,
-                center = localCenter
-            )
-        }
-        drawCircle(
-            color = Color(0xFF00E5FF),
-            radius = avatarState.radius * scale,
-            center = localCenter
+        drawAvatarDot(
+            center = localScreen,
+            radiusPx = avatarState.radius * viewport.scale,
+            fillColor = LocalAvatarColor,
+            showSpeakingHalo = avatarState.isSpeaking
         )
-        
-        val drawConnectionQuality = { quality: ConnectionQuality, center: Offset ->
-            val color = when (quality) {
-                ConnectionQuality.EXCELLENT -> Color(0xFF4CAF50)
-                ConnectionQuality.GOOD -> Color(0xFFFFEB3B)
-                ConnectionQuality.POOR, ConnectionQuality.LOST -> Color(0xFFF44336)
-                else -> Color.Transparent
-            }
-            if (color != Color.Transparent) {
-                drawCircle(
-                    color = color,
-                    radius = 5f * scale,
-                    center = center + Offset(avatarState.radius * scale * 0.7f, -avatarState.radius * scale * 0.7f)
-                )
-            }
-        }
-        
-        drawConnectionQuality(avatarState.connectionQuality, localCenter)
 
-        // ── 5. Remote Peers ──────────────────────────────────────────────────
         remotePeers.forEach { peer ->
-            val peerCenter = Offset(
-                peer.position.x * scale + offset.x,
-                peer.position.y * scale + offset.y
+            val peerScreen = MapCamera.worldToScreen(peer.position.x, peer.position.y, viewport, screenSize)
+            drawAvatarDot(
+                center = peerScreen,
+                radiusPx = avatarState.radius * viewport.scale,
+                fillColor = RemoteAvatarColor,
+                showSpeakingHalo = peer.isSpeaking
             )
-            if (peer.isSpeaking) {
-                drawCircle(
-                    color = Color(0xFF4CAF50).copy(alpha = 0.5f),
-                    radius = avatarState.radius * scale * 1.5f,
-                    center = peerCenter
-                )
-            }
-            drawCircle(
-                color = Color(0xFF9E9E9E),
-                radius = avatarState.radius * scale,
-                center = peerCenter
-            )
-            drawConnectionQuality(peer.connectionQuality, peerCenter)
         }
     }
+}
+
+/**
+ * White edge glow on the active table (logic-space rect), shown when avatar is within interaction range.
+ */
+private fun DrawScope.drawTableInteractionEdgeHighlight(
+    tableRect: Rect,
+    viewport: MapViewport,
+    screenSize: Size
+) {
+    val topLeft = MapCamera.worldToScreen(tableRect.left, tableRect.top, viewport, screenSize)
+    val bottomRight = MapCamera.worldToScreen(tableRect.right, tableRect.bottom, viewport, screenSize)
+    val width = bottomRight.x - topLeft.x
+    val height = bottomRight.y - topLeft.y
+    if (width <= 1f || height <= 1f) return
+
+    val strokeBase = (2.5f * viewport.scale).coerceIn(1.5f, 5f)
+    val expandSteps = listOf(
+        14f to 0.06f,
+        10f to 0.12f,
+        7f to 0.22f,
+        4f to 0.38f,
+        2f to 0.58f,
+        0f to 0.88f
+    )
+
+    expandSteps.forEach { (expandPx, alpha) ->
+        val pad = expandPx * viewport.scale.coerceIn(0.5f, 2f)
+        drawRect(
+            color = Color.White.copy(alpha = alpha),
+            topLeft = topLeft - Offset(pad, pad),
+            size = Size(width + pad * 2f, height + pad * 2f),
+            style = Stroke(width = strokeBase)
+        )
+    }
+}
+
+private fun DrawScope.drawBackgroundCover(
+    image: ImageBitmap?,
+    viewport: MapViewport,
+    screenSize: Size
+) {
+    if (image == null) {
+        drawRect(color = Color(0xFF1A1A2E), size = screenSize)
+        return
+    }
+
+    val mapW = viewport.logicWidth
+    val mapH = viewport.logicHeight
+    val scaledW = mapW * viewport.scale
+    val scaledH = mapH * viewport.scale
+    val topLeft = Offset(
+        x = screenSize.width / 2f - viewport.camX * viewport.scale,
+        y = screenSize.height / 2f - viewport.camY * viewport.scale
+    )
+
+    drawImage(
+        image = image,
+        dstOffset = androidx.compose.ui.unit.IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+        dstSize = androidx.compose.ui.unit.IntSize(scaledW.roundToInt(), scaledH.roundToInt())
+    )
+}
+
+private fun DrawScope.drawAvatarDot(
+    center: Offset,
+    radiusPx: Float,
+    fillColor: Color,
+    showSpeakingHalo: Boolean
+) {
+    if (showSpeakingHalo) {
+        drawCircle(
+            color = SpeakingHalo,
+            radius = radiusPx * 1.45f,
+            center = center
+        )
+    }
+    drawCircle(color = fillColor, radius = radiusPx.coerceAtLeast(4f), center = center)
 }
