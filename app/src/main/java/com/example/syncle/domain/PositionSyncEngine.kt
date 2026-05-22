@@ -7,8 +7,13 @@ import java.nio.ByteOrder
 class PositionSyncEngine {
     private val encodeBuffer = ByteBuffer.allocate(PACKET_SIZE).order(ByteOrder.LITTLE_ENDIAN)
     private var lastBroadcastPosition: Offset? = null
+    // Monotonic per-instance counter; immune to wall-clock jumps.
+    private var nextSeq: Long = 0L
 
     data class PositionPacket(val x: Float, val y: Float, val seq: Long)
+
+    /** Allocates the next monotonic sequence id for an outgoing packet. */
+    fun nextSequence(): Long = nextSeq++
 
     fun encodeIfMoved(position: Offset, seq: Long): ByteArray? {
         val last = lastBroadcastPosition
@@ -41,12 +46,11 @@ class PositionSyncEngine {
 
     fun reset() {
         lastBroadcastPosition = null
+        nextSeq = 0L
     }
 
     companion object {
         const val TYPE_POSITION: Byte = 1
         const val PACKET_SIZE = 1 + 4 + 4 + 8 // 17 bytes
-
-        fun sequenceNow(): Long = System.currentTimeMillis()
     }
 }

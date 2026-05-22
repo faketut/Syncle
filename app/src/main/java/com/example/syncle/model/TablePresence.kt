@@ -22,13 +22,14 @@ object TablePresence {
 
     fun tableIdForJoinTap(playerPosition: Offset, tapWorld: Offset, mapConfig: MapConfig): String? {
         return mapConfig.tables
-            .map { it.id to distanceToRect(tapWorld, it.rect) }
-            .filter { (id, tapDist) ->
+            .map { table -> table to distanceToRect(tapWorld, table.rect) }
+            .filter { (table, tapDist) ->
                 tapDist <= TAP_JOIN_HIT_THRESHOLD &&
-                    distanceToRect(playerPosition, mapConfig.tablesById[id]!!.rect) < INTERACTION_THRESHOLD
+                    distanceToRect(playerPosition, table.rect) < INTERACTION_THRESHOLD
             }
             .minByOrNull { (_, tapDist) -> tapDist }
             ?.first
+            ?.id
     }
 
     fun effectiveTableMeetingId(

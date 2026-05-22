@@ -47,9 +47,9 @@ class AuthRepository {
                 .build()
 
             client.newCall(request).execute().use { response ->
-                if (response.isSuccessful && response.body != null) {
-                    val responseString = response.body!!.string()
-                    val json = JSONObject(responseString)
+                val body = response.body
+                if (response.isSuccessful && body != null) {
+                    val json = JSONObject(body.string())
                     ConnectionDetails(
                         serverUrl = json.getString("serverUrl"),
                         token = json.getString("participantToken")

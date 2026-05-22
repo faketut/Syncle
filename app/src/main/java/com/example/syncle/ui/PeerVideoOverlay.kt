@@ -29,11 +29,15 @@ fun PeerVideoOverlay(
     modifier: Modifier = Modifier
 ) {
     val proximityThreshold = 300f
-    val localPosition = localAvatar.position
-    val nearbyPeers by remember(remotePeers, localPosition) {
+    // Read all reactive inputs (peer.position, peer.videoTrack, localAvatar.position)
+    // inside the lambda so Compose's snapshot system tracks them correctly. Keying
+    // remember() on volatile inputs like localAvatar.position would re-create the
+    // derivedStateOf every frame and defeat the optimization.
+    val nearbyPeers by remember(remotePeers) {
         derivedStateOf {
+            val origin = localAvatar.position
             remotePeers.filter { peer ->
-                (localPosition - peer.position).getDistance() < proximityThreshold &&
+                (origin - peer.position).getDistance() < proximityThreshold &&
                     peer.videoTrack != null
             }
         }

@@ -173,7 +173,7 @@ private fun MeetingControlButton(
 @Composable
 private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?) {
     val borderColor = if (participant.isSpeaking) Color(0xFF4CAF50) else Color(0xFF3A3A42)
-    val showVideo = room != null && participant.videoTrack != null
+    val videoRoom = room.takeIf { participant.videoTrack != null }
     Box(
         modifier = Modifier
             .aspectRatio(1.15f)
@@ -181,9 +181,9 @@ private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?)
             .background(Color(0xFF25252C))
             .border(2.dp, borderColor, RoundedCornerShape(10.dp))
     ) {
-        if (showVideo) {
+        if (videoRoom != null) {
             SyncleVideoRenderer(
-                room = room!!,
+                room = videoRoom,
                 videoTrack = participant.videoTrack,
                 modifier = Modifier.fillMaxSize(),
                 mirror = participant.isLocal
@@ -195,7 +195,7 @@ private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?)
                 .padding(10.dp),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            if (!showVideo) {
+            if (videoRoom == null) {
                 Box(
                     modifier = Modifier
                         .size(48.dp)

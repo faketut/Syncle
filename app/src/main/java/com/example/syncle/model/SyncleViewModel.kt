@@ -15,7 +15,6 @@ import com.example.syncle.domain.TableMeetingController
 import com.example.syncle.model.TablePresence
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,7 +22,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class SyncleViewModel : ViewModel() {
     val avatarState = AvatarState(initialPosition = Offset(100f, 100f))
@@ -41,16 +39,25 @@ class SyncleViewModel : ViewModel() {
     private var syncJob: Job? = null
     private var lerpJob: Job? = null
     private var eventsJob: Job? = null
+    private var cameraTrackWatchJob: Job? = null
 
-    private var urlInternal = ""
-    private var tokenInternal = ""
-    private var isAutoFetchingInternal = false
-    private var startupErrorInternal: String? = null
-    private var lastConnectErrorInternal: String? = null
-    private var connectionStatusInternal = ConnectionStatus.DISCONNECTED
+    // Connection screen state — single source of truth; UI observes via [uiState].
+    private var url = ""
+    private var token = ""
+    private var isAutoFetching = false
+    private var startupError: String? = null
+    private var lastConnectError: String? = null
+    private var connectionStatus = ConnectionStatus.DISCONNECTED
 
     private var lastSpeakingIds: Set<String> = emptySet()
-    private var lastNearbyItemId: String? = null
+
+    // Bumps every time something that could change spatial-audio output happens
+    // (local move, peer move, peer status/table attr, peer joined/left). The 20Hz
+    // sync loop skips the spatial-audio recompute when the flag is clean so an
+    // idle room costs ~nothing on the main thread.
+    private var spatialAudioDirty: Boolean = true
+
+    private fun markSpatialAudioDirty() { spatialAudioDirty = true }
 
     private val _uiState = MutableStateFlow(SyncleUiState())
     val uiState: StateFlow<SyncleUiState> = _uiState.asStateFlow()
@@ -69,59 +76,46 @@ class SyncleViewModel : ViewModel() {
 
     fun getLocalVideoTrack(): VideoTrack? = liveKitService?.getLocalVideoTrack()
 
-    // Connection screen bindings
-    var url: String
-        get() = urlInternal
-        set(value) {
-            urlInternal = value
-            pushUiState()
-        }
-    var token: String
-        get() = tokenInternal
-        set(value) {
-            tokenInternal = value
-            pushUiState()
-        }
-    var isAutoFetching: Boolean
-        get() = isAutoFetchingInternal
-        private set(value) {
-            isAutoFetchingInternal = value
-            pushUiState()
-        }
-    var startupError: String?
-        get() = startupErrorInternal
-        private set(value) {
-            startupErrorInternal = value
-            pushUiState()
-        }
-    var connectionStatus: ConnectionStatus
-        get() = connectionStatusInternal
-        private set(value) {
-            connectionStatusInternal = value
-            pushUiState()
-        }
+    fun setUrl(value: String) {
+        if (url == value) return
+        url = value
+        pushUiState()
+    }
+
+    fun setToken(value: String) {
+        if (token == value) return
+        token = value
+        pushUiState()
+    }
+
+    fun setStartupError(message: String?) {
+        if (startupError == message) return
+        startupError = message
+        pushUiState()
+    }
 
     fun autoFetchSandboxDetails() {
         if (isAutoFetching) return
         viewModelScope.launch {
             isAutoFetching = true
+            pushUiState()
             try {
                 SyncleLog.d("Starting sandbox token auto-fetch (sandboxId=${BuildConfig.LIVEKIT_SANDBOX_ID})")
                 val details = authRepository.fetchSandboxConnectionDetails()
                 if (details != null) {
-                    urlInternal = details.serverUrl
-                    tokenInternal = details.token
-                    startupErrorInternal = null
+                    url = details.serverUrl
+                    token = details.token
+                    startupError = null
                     SyncleLog.d("Sandbox auto-fetch success")
                 } else {
                     // AuthRepository logs http status/body; surface a short actionable hint in UI.
-                    startupErrorInternal =
+                    startupError =
                         "Sandbox token fetch failed. Check local.properties livekit.sandbox_id, and network access."
                     SyncleLog.w("Sandbox auto-fetch returned null")
                 }
             } catch (e: Exception) {
                 SyncleLog.e("Sandbox auto-fetch failed", e)
-                startupErrorInternal = "Startup Error: ${e.message}"
+                startupError = "Startup Error: ${e.message}"
             } finally {
                 isAutoFetching = false
                 pushUiState()
@@ -133,29 +127,30 @@ class SyncleViewModel : ViewModel() {
         if (connectionStatus == ConnectionStatus.CONNECTING || connectionStatus == ConnectionStatus.CONNECTED) return
         val cache = mapCache
         if (cache == null) {
-            lastConnectErrorInternal = "Map not loaded yet. Wait a moment and try again."
+            lastConnectError = "Map not loaded yet. Wait a moment and try again."
             connectionStatus = ConnectionStatus.ERROR
             pushUiState()
             return
         }
 
         connectionStatus = ConnectionStatus.CONNECTING
-        lastConnectErrorInternal = null
+        lastConnectError = null
+        pushUiState()
 
         val service = LiveKitService(context.applicationContext)
         liveKitService = service
         collectLiveKitEvents(service)
 
         viewModelScope.launch {
-            val result = service.connect(urlInternal, tokenInternal)
+            val result = service.connect(url, token)
             if (result.success) {
                 connectionStatus = ConnectionStatus.CONNECTED
-                lastConnectErrorInternal = null
+                lastConnectError = null
                 startLoops(cache)
                 SyncleLog.d("LiveKit connected")
             } else {
                 connectionStatus = ConnectionStatus.ERROR
-                lastConnectErrorInternal = result.errorMessage
+                lastConnectError = result.errorMessage
                 SyncleLog.w("LiveKit connect failed: ${result.errorMessage}")
             }
             pushUiState()
@@ -181,7 +176,8 @@ class SyncleViewModel : ViewModel() {
     fun onMove(delta: Offset) {
         val cache = mapCache ?: return
         val previousNearby = avatarState.nearbyItemId
-        avatarState.move(delta, cache)
+        val moved = avatarState.move(delta, cache)
+        if (moved) markSpatialAudioDirty()
         if (avatarState.nearbyItemId != previousNearby) {
             pushUiState()
         }
@@ -190,6 +186,7 @@ class SyncleViewModel : ViewModel() {
     fun joinTableMeeting(tableId: String) {
         if (meeting.join(tableId)) {
             mapCache?.invalidateProximityCache()
+            markSpatialAudioDirty()
             pushUiState()
         }
     }
@@ -197,6 +194,7 @@ class SyncleViewModel : ViewModel() {
     fun leaveTableMeeting() {
         meeting.leave()
         mapCache?.invalidateProximityCache()
+        markSpatialAudioDirty()
         pushUiState()
     }
 
@@ -208,9 +206,19 @@ class SyncleViewModel : ViewModel() {
     fun toggleMeetingCamera() {
         meeting.toggleCamera()
         pushUiState()
-        viewModelScope.launch {
-            delay(300)
-            pushUiState()
+        // The local video track appears asynchronously after enabling the camera;
+        // poll briefly (instead of a magic 300ms delay) so the meeting tile lights up
+        // as soon as the track is available, on any device.
+        cameraTrackWatchJob?.cancel()
+        cameraTrackWatchJob = viewModelScope.launch {
+            val initialTrack = liveKitService?.getLocalVideoTrack()
+            repeat(20) { // up to ~1s total (20 × 50ms)
+                delay(50)
+                if (liveKitService?.getLocalVideoTrack() !== initialTrack) {
+                    pushUiState()
+                    return@launch
+                }
+            }
         }
     }
 
@@ -223,22 +231,25 @@ class SyncleViewModel : ViewModel() {
         val mapConfig = cache.config
         syncJob = viewModelScope.launch {
             while (isActive) {
-                val seq = PositionSyncEngine.sequenceNow()
+                val seq = positionSync.nextSequence()
                 positionSync.encodeIfMoved(avatarState.position, seq)?.let { payload ->
                     liveKitService?.publishPosition(payload)
                 }
                 meeting.syncPresence(cache)
-                val acousticTable = cache.resolveLocalAcousticTable(
-                    avatarState.position,
-                    meeting.activeTableMeetingId
-                )
-                liveKitService?.updateSpatialAudio(
-                    peerRegistry.snapshot(),
-                    avatarState,
-                    mapConfig,
-                    acousticTable,
-                    spatialAudio
-                )
+                if (spatialAudioDirty) {
+                    spatialAudioDirty = false
+                    val acousticTable = cache.resolveLocalAcousticTable(
+                        avatarState.position,
+                        meeting.activeTableMeetingId
+                    )
+                    liveKitService?.updateSpatialAudio(
+                        peerRegistry.snapshot(),
+                        avatarState,
+                        mapConfig,
+                        acousticTable,
+                        spatialAudio
+                    )
+                }
                 delay(50)
             }
         }
@@ -269,12 +280,14 @@ class SyncleViewModel : ViewModel() {
         if (seq >= peer.lastSequence) {
             peer.targetPosition = position
             peer.lastSequence = seq
+            markSpatialAudioDirty()
         }
     }
 
     private fun onParticipantDisconnected(id: String) {
         spatialAudio.clearPeer(id)
         peerRegistry.remove(id)
+        markSpatialAudioDirty()
         pushUiState()
     }
 
@@ -317,7 +330,10 @@ class SyncleViewModel : ViewModel() {
                 changed = true
             }
         }
-        if (changed) pushUiState()
+        if (changed) {
+            markSpatialAudioDirty()
+            pushUiState()
+        }
     }
 
     private fun onConnectionQualityChanged(id: String, quality: io.livekit.android.room.participant.ConnectionQuality) {
@@ -336,12 +352,14 @@ class SyncleViewModel : ViewModel() {
     fun setLocalStatus(newStatus: UserStatus) {
         avatarState.status = newStatus
         liveKitService?.setLocalAttributes(mapOf("status" to newStatus.name))
+        markSpatialAudioDirty()
     }
 
     fun disconnect() {
         syncJob?.cancel()
         lerpJob?.cancel()
         eventsJob?.cancel()
+        cameraTrackWatchJob?.cancel()
         liveKitService?.disconnect()
         liveKitService = null
         peerRegistry.clear()
@@ -366,12 +384,12 @@ class SyncleViewModel : ViewModel() {
         _uiState.value = SyncleUiState(
             mapReady = ready,
             connection = ConnectionUi(
-                status = connectionStatusInternal,
-                url = urlInternal,
-                token = tokenInternal,
-                isAutoFetching = isAutoFetchingInternal,
-                startupError = startupErrorInternal,
-                lastConnectError = lastConnectErrorInternal
+                status = connectionStatus,
+                url = url,
+                token = token,
+                isAutoFetching = isAutoFetching,
+                startupError = startupError,
+                lastConnectError = lastConnectError
             ),
             meeting = MeetingUi(
                 activeTableId = meetingId,
@@ -392,9 +410,5 @@ class SyncleViewModel : ViewModel() {
                 nearbyItemId = avatarState.nearbyItemId
             )
         )
-        val nearby = avatarState.nearbyItemId
-        if (nearby != lastNearbyItemId) {
-            lastNearbyItemId = nearby
-        }
     }
 }

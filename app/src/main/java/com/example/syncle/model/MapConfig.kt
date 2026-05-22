@@ -27,8 +27,10 @@ data class MapConfig(
             if (walkableAreas.isEmpty()) return Rect(0f, 0f, 1000f, 1000f)
             var left = Float.MAX_VALUE
             var top = Float.MAX_VALUE
-            var right = Float.MIN_VALUE
-            var bottom = Float.MIN_VALUE
+            // NB: Float.MIN_VALUE is the smallest *positive* float; use -MAX_VALUE
+            // so rects with negative coordinates accumulate correctly.
+            var right = -Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
             walkableAreas.forEach { r ->
                 left = minOf(left, r.left)
                 top = minOf(top, r.top)
