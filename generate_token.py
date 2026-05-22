@@ -25,7 +25,7 @@ def generate_token(room_name, participant_name):
     return token.to_jwt()
 
 if __name__ == "__main__":
-    room = "syncle -office"
+    room = "syncle-office"
 
     # 为不同的测试角色生成 Token
     participants = ["Me", "Peer_Alpha", "Peer_Beta"]
