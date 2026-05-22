@@ -1,7 +1,6 @@
 package com.example.syncle.domain
 
 import androidx.compose.ui.geometry.Offset
-import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -39,21 +38,7 @@ class PositionSyncEngine {
             val seq = buf.long
             return PositionPacket(x, y, seq)
         }
-        return decodeLegacyJson(data)
-    }
-
-    private fun decodeLegacyJson(data: ByteArray): PositionPacket? {
-        return try {
-            val json = JSONObject(String(data, Charsets.UTF_8))
-            if (json.optString("type") != "position") return null
-            PositionPacket(
-                x = json.getDouble("x").toFloat(),
-                y = json.getDouble("y").toFloat(),
-                seq = json.optLong("seq", 0)
-            )
-        } catch (_: Exception) {
-            null
-        }
+        return null
     }
 
     fun reset() {
