@@ -30,13 +30,11 @@ class PositionSyncEngineTest {
     }
 
     @Test
-    fun decode_legacyJson() {
+    fun decode_nonBinaryReturnsNull() {
         val engine = PositionSyncEngine()
         val json = """{"type":"position","x":1.5,"y":2.5,"seq":7}""".toByteArray(Charsets.UTF_8)
-        val decoded = engine.decode(json)
-        assertNotNull(decoded)
-        assertEquals(1.5f, decoded!!.x, 0.001f)
-        assertEquals(2.5f, decoded.y, 0.001f)
-        assertEquals(7L, decoded.seq)
+        assertNull(engine.decode(json))
+        assertNull(engine.decode(byteArrayOf()))
+        assertNull(engine.decode(byteArrayOf(99)))
     }
 }
