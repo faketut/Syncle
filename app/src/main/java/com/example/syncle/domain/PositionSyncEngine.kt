@@ -1,14 +1,12 @@
 package com.example.syncle.domain
 
 import androidx.compose.ui.geometry.Offset
-import org.json.JSONObject
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 class PositionSyncEngine {
     private val encodeBuffer = ByteBuffer.allocate(PACKET_SIZE).order(ByteOrder.LITTLE_ENDIAN)
     private var lastBroadcastPosition: Offset? = null
-    private var lastBroadcastSeq: Long = 0L
 
     data class PositionPacket(val x: Float, val y: Float, val seq: Long)
 
@@ -18,7 +16,6 @@ class PositionSyncEngine {
             return null
         }
         lastBroadcastPosition = position
-        lastBroadcastSeq = seq
         encodeBuffer.clear()
         encodeBuffer.put(TYPE_POSITION)
         encodeBuffer.putFloat(position.x)
@@ -39,26 +36,11 @@ class PositionSyncEngine {
             val seq = buf.long
             return PositionPacket(x, y, seq)
         }
-        return decodeLegacyJson(data)
-    }
-
-    private fun decodeLegacyJson(data: ByteArray): PositionPacket? {
-        return try {
-            val json = JSONObject(String(data, Charsets.UTF_8))
-            if (json.optString("type") != "position") return null
-            PositionPacket(
-                x = json.getDouble("x").toFloat(),
-                y = json.getDouble("y").toFloat(),
-                seq = json.optLong("seq", 0)
-            )
-        } catch (_: Exception) {
-            null
-        }
+        return null
     }
 
     fun reset() {
         lastBroadcastPosition = null
-        lastBroadcastSeq = 0L
     }
 
     companion object {
