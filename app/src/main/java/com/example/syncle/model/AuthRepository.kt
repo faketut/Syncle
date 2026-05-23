@@ -1,70 +1,88 @@
 package com.example.syncle.model
 
 import com.example.syncle.BuildConfig
+import com.example.syncle.domain.SyncleLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import com.example.syncle.domain.SyncleLog
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
 data class ConnectionDetails(
     val serverUrl: String,
-    val token: String
+    val token: String,
+    val userId: String,
+    val nickname: String,
+    val color: String,
 )
 
-class AuthRepository {
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .build()
-
-    private val jsonMediaType = "application/json; charset=utf-8".toMediaType()
-
-    suspend fun fetchSandboxConnectionDetails(
-        roomName: String = "syncle-office",
-        participantName: String = "User_${(100..999).random()}"
+/**
+ * Talks to the Syncle backend ([server/]) to exchange a stable deviceId +
+ * desired nickname for a LiveKit JWT bound to a persistent userId. Replaces
+ * the previous LiveKit Sandbox flow.
+ */
+class AuthRepository(
+    private val backendUrl: String = BuildConfig.SYNCLE_BACKEND_URL,
+    private val client: OkHttpClient = defaultClient,
+) {
+    suspend fun fetchSession(
+        deviceId: String,
+        nickname: String,
+        color: String,
+        room: String = "syncle-office",
     ): ConnectionDetails? = withContext(Dispatchers.IO) {
+        val base = backendUrl.trim().ifEmpty {
+            SyncleLog.w("SYNCLE_BACKEND_URL is empty. Set syncle.backend_url in local.properties.")
+            return@withContext null
+        }
+        val sessionsUrl = base.trimEnd('/') + "/v1/sessions"
+        if (sessionsUrl.toHttpUrlOrNull() == null) {
+            SyncleLog.w("SYNCLE_BACKEND_URL is not a valid URL: $base")
+            return@withContext null
+        }
+
+        val body = JSONObject().apply {
+            put("deviceId", deviceId)
+            put("nickname", nickname)
+            put("color", color)
+            put("room", room)
+        }
+        val request = Request.Builder()
+            .url(sessionsUrl)
+            .post(body.toString().toRequestBody(JSON))
+            .build()
+
         try {
-            val sandboxId = BuildConfig.LIVEKIT_SANDBOX_ID
-            if (sandboxId.isEmpty()) {
-                SyncleLog.w("LIVEKIT_SANDBOX_ID is empty. Check local.properties: livekit.sandbox_id=...")
-                return@withContext null
-            }
-
-            val bodyJson = JSONObject().apply {
-                put("room_name", roomName)
-                put("participant_name", participantName)
-            }
-
-            val request = Request.Builder()
-                .url("https://cloud-api.livekit.io/api/sandbox/connection-details")
-                .post(bodyJson.toString().toRequestBody(jsonMediaType))
-                .header("X-Sandbox-ID", sandboxId)
-                .build()
-
             client.newCall(request).execute().use { response ->
-                if (response.isSuccessful && response.body != null) {
-                    val responseString = response.body!!.string()
-                    val json = JSONObject(responseString)
-                    ConnectionDetails(
-                        serverUrl = json.getString("serverUrl"),
-                        token = json.getString("participantToken")
-                    )
-                } else {
-                    val errorBody = try { response.body?.string() } catch (_: Exception) { null }
-                    SyncleLog.w(
-                        "Sandbox token fetch failed: http=${response.code}. body=${errorBody ?: "<empty>"}"
-                    )
-                    null
+                val payload = response.body?.string()
+                if (!response.isSuccessful || payload.isNullOrEmpty()) {
+                    SyncleLog.w("fetchSession failed http=${response.code} body=${payload ?: "<empty>"}")
+                    return@withContext null
                 }
+                val json = JSONObject(payload)
+                ConnectionDetails(
+                    serverUrl = json.getString("serverUrl"),
+                    token = json.getString("token"),
+                    userId = json.getString("userId"),
+                    nickname = json.optString("nickname", nickname),
+                    color = json.optString("color", color),
+                )
             }
         } catch (e: Exception) {
-            SyncleLog.e("fetchSandboxConnectionDetails failed", e)
+            SyncleLog.e("fetchSession failed", e)
             null
         }
+    }
+
+    private companion object {
+        val JSON = "application/json; charset=utf-8".toMediaType()
+        val defaultClient: OkHttpClient = OkHttpClient.Builder()
+            .connectTimeout(10, TimeUnit.SECONDS)
+            .readTimeout(10, TimeUnit.SECONDS)
+            .build()
     }
 }

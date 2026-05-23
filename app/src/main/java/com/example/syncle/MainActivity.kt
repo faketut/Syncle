@@ -128,7 +128,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
     }
 
     LaunchedEffect(Unit) {
-        viewModel.autoFetchSandboxDetails()
+        viewModel.autoFetchSession(context)
     }
 
     if (!uiState.mapReady || mapConfig == null) {

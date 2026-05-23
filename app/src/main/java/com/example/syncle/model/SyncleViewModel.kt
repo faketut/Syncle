@@ -1,10 +1,14 @@
 package com.example.syncle.model
 
 import android.content.Context
-import com.example.syncle.BuildConfig
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.syncle.data.DeviceIdStore
+import com.example.syncle.data.Profile
+import com.example.syncle.data.ProfileStore
+import com.example.syncle.data.RoomStateReporter
+import com.example.syncle.data.SnapshotApi
 import com.example.syncle.domain.MapConfigCache
 import com.example.syncle.domain.LiveKitEvent
 import com.example.syncle.domain.PeerRegistry
@@ -56,6 +60,12 @@ class SyncleViewModel : ViewModel() {
     val uiState: StateFlow<SyncleUiState> = _uiState.asStateFlow()
 
     private val authRepository = AuthRepository()
+    private val snapshotApi = SnapshotApi()
+    private val stateReporter = RoomStateReporter()
+    private var sessionUserId: String? = null
+    private var sessionProfile: Profile? = null
+    private var sessionRoom: String = "syncle-office"
+    private var reporterJob: Job? = null
 
     fun setMapConfig(config: MapConfig) {
         mapConfig = config
@@ -101,26 +111,35 @@ class SyncleViewModel : ViewModel() {
             pushUiState()
         }
 
-    fun autoFetchSandboxDetails() {
+    fun autoFetchSession(context: Context) {
         if (isAutoFetching) return
         viewModelScope.launch {
             isAutoFetching = true
             try {
-                SyncleLog.d("Starting sandbox token auto-fetch (sandboxId=${BuildConfig.LIVEKIT_SANDBOX_ID})")
-                val details = authRepository.fetchSandboxConnectionDetails()
+                val deviceId = DeviceIdStore(context).getOrCreate()
+                val profile = ProfileStore(context).get()
+                avatarState.name = profile.nickname
+                sessionProfile = profile
+                SyncleLog.d("Fetching session: deviceId=$deviceId nick=${profile.nickname}")
+                val details = authRepository.fetchSession(
+                    deviceId = deviceId,
+                    nickname = profile.nickname,
+                    color = profile.color,
+                    room = sessionRoom,
+                )
                 if (details != null) {
                     urlInternal = details.serverUrl
                     tokenInternal = details.token
+                    sessionUserId = details.userId
                     startupErrorInternal = null
-                    SyncleLog.d("Sandbox auto-fetch success")
+                    SyncleLog.d("Session fetch success userId=${details.userId}")
                 } else {
-                    // AuthRepository logs http status/body; surface a short actionable hint in UI.
                     startupErrorInternal =
-                        "Sandbox token fetch failed. Check local.properties livekit.sandbox_id, and network access."
-                    SyncleLog.w("Sandbox auto-fetch returned null")
+                        "Backend session fetch failed. Check syncle.backend_url in local.properties and that the server is reachable."
+                    SyncleLog.w("Session fetch returned null")
                 }
             } catch (e: Exception) {
-                SyncleLog.e("Sandbox auto-fetch failed", e)
+                SyncleLog.e("Session fetch failed", e)
                 startupErrorInternal = "Startup Error: ${e.message}"
             } finally {
                 isAutoFetching = false
@@ -151,7 +170,10 @@ class SyncleViewModel : ViewModel() {
             if (result.success) {
                 connectionStatus = ConnectionStatus.CONNECTED
                 lastConnectErrorInternal = null
+                publishLocalProfileAttribute()
+                seedFromSnapshot()
                 startLoops(cache)
+                startStateReporter()
                 SyncleLog.d("LiveKit connected")
             } else {
                 connectionStatus = ConnectionStatus.ERROR
@@ -317,7 +339,57 @@ class SyncleViewModel : ViewModel() {
                 changed = true
             }
         }
+        attributes[ATTR_COLOR]?.takeIf { it.isNotEmpty() }?.let { newColor ->
+            if (peer.color != newColor) {
+                peer.color = newColor
+                changed = true
+            }
+        }
         if (changed) pushUiState()
+    }
+
+    private fun publishLocalProfileAttribute() {
+        val profile = sessionProfile ?: return
+        liveKitService?.setLocalAttributes(mapOf(ATTR_COLOR to profile.color))
+    }
+
+    private fun seedFromSnapshot() {
+        val selfId = sessionUserId
+        viewModelScope.launch {
+            val peers = snapshotApi.fetch(sessionRoom)
+            peers.asSequence()
+                .filter { it.userId != selfId }
+                .forEach { snap ->
+                    val pos = Offset(snap.x, snap.y)
+                    val peer = peerRegistry.getOrCreate(snap.userId, pos)
+                    peer.displayName = snap.nickname
+                    peer.color = snap.color
+                    peer.targetPosition = pos
+                    peer.position = pos
+                    peer.tableMeetingId = snap.tableId
+                }
+            if (peers.isNotEmpty()) pushUiState()
+            SyncleLog.d("Snapshot seeded peers=${peers.size}")
+        }
+    }
+
+    private fun startStateReporter() {
+        reporterJob?.cancel()
+        val userId = sessionUserId ?: return
+        val token = tokenInternal
+        if (token.isEmpty()) return
+        reporterJob = viewModelScope.launch {
+            while (isActive) {
+                stateReporter.report(
+                    room = sessionRoom,
+                    userId = userId,
+                    token = token,
+                    tableId = meeting.activeTableMeetingId,
+                    position = avatarState.position,
+                )
+                delay(REPORTER_INTERVAL_MS)
+            }
+        }
     }
 
     private fun onConnectionQualityChanged(id: String, quality: io.livekit.android.room.participant.ConnectionQuality) {
@@ -342,6 +414,18 @@ class SyncleViewModel : ViewModel() {
         syncJob?.cancel()
         lerpJob?.cancel()
         eventsJob?.cancel()
+        reporterJob?.cancel()
+        // Best-effort final state push so late joiners see our last position
+        // even after we leave, until the 60s freshness window expires.
+        val userId = sessionUserId
+        val token = tokenInternal
+        if (userId != null && token.isNotEmpty()) {
+            val tableId = meeting.activeTableMeetingId
+            val pos = avatarState.position
+            viewModelScope.launch {
+                stateReporter.report(sessionRoom, userId, token, tableId, pos)
+            }
+        }
         liveKitService?.disconnect()
         liveKitService = null
         peerRegistry.clear()
@@ -396,5 +480,10 @@ class SyncleViewModel : ViewModel() {
         if (nearby != lastNearbyItemId) {
             lastNearbyItemId = nearby
         }
+    }
+
+    private companion object {
+        const val ATTR_COLOR = "color"
+        const val REPORTER_INTERVAL_MS = 10_000L
     }
 }
