@@ -18,7 +18,10 @@ import com.example.syncle.domain.SyncleLog
 import com.example.syncle.domain.TableMeetingController
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -480,32 +483,56 @@ class SyncleViewModel : ViewModel() {
         lerpJob?.cancel()
         eventsJob?.cancel()
         reporterJob?.cancel()
-        // Best-effort final state push so late joiners see our last position
-        // even after we leave, until the 60s freshness window expires.
+        val service = liveKitService
+        liveKitService = null
+        // Capture state under viewModelScope confinement so a concurrent
+        // connect() can't observe half-cleared state.
         val userId = sessionUserId
         val token = tokenInternal
-        if (userId != null && token.isNotEmpty()) {
-            val tableId = meeting.activeTableMeetingId
-            val pos = avatarState.position
-            viewModelScope.launch {
-                stateReporter.report(sessionRoom, userId, token, tableId, pos)
+        val tableId = meeting.activeTableMeetingId
+        val pos = avatarState.position
+        viewModelScope.launch {
+            // Best-effort final state push so late joiners see our last
+            // position even after we leave, until the 60s freshness window
+            // expires.
+            if (userId != null && token.isNotEmpty()) {
+                try {
+                    stateReporter.report(sessionRoom, userId, token, tableId, pos)
+                } catch (e: Exception) {
+                    SyncleLog.w("Final state report failed: ${e.message}")
+                }
             }
+            // Await full SDK teardown before clearing local state so the next
+            // connect() can't race against dangling native handles.
+            service?.disconnect()
+            peerRegistry.clear()
+            spatialAudio.clearAll()
+            positionSync.reset()
+            meeting.reset()
+            lastSpeakingIds = emptySet()
+            mapCache?.invalidateProximityCache()
+            connectionStatus = ConnectionStatus.DISCONNECTED
+            pushUiState()
         }
-        liveKitService?.disconnect()
-        liveKitService = null
-        peerRegistry.clear()
-        spatialAudio.clearAll()
-        positionSync.reset()
-        meeting.reset()
-        lastSpeakingIds = emptySet()
-        mapCache?.invalidateProximityCache()
-        connectionStatus = ConnectionStatus.DISCONNECTED
-        pushUiState()
     }
 
     override fun onCleared() {
         super.onCleared()
-        disconnect()
+        // viewModelScope is cancelled as part of onCleared, so launching the
+        // suspending disconnect() there would be a no-op. Use a detached
+        // scope on Dispatchers.IO so the SDK still tears down cleanly when
+        // the process is leaving the ViewModel behind.
+        val service = liveKitService
+        liveKitService = null
+        if (service != null) {
+            CoroutineScope(Dispatchers.IO + SupervisorJob()).launch {
+                try {
+                    service.disconnect()
+                } catch (_: Exception) {
+                    // best-effort
+                }
+            }
+        }
     }
 
     private fun pushUiState(mapReady: Boolean? = null) {
