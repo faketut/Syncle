@@ -452,6 +452,8 @@ class SyncleViewModel : ViewModel() {
                 // attribute / data events are delayed or dropped. Backend is the
                 // source of truth.
                 seedFromSnapshot()
+                // Safety net for missing TrackSubscribed events.
+                liveKitService?.rescanVideoTracks()
                 delay(REPORTER_INTERVAL_MS)
             }
         }
