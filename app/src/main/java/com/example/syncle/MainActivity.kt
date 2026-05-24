@@ -32,22 +32,17 @@ class MainActivity : ComponentActivity() {
         val viewModel = ViewModelProvider(this)[SyncleViewModel::class.java]
 
         lifecycleScope.launch {
-            val config = withContext(Dispatchers.IO) {
-                try {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
                     val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
                     MapRepository().parseJsonConfig(jsonString)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    MapConfig(
-                        mapName = "Office Blueprint (Fallback)",
-                        backgroundImage = "room1.jpg",
-                        walkableAreas = listOf(Rect(0f, 0f, 2000f, 2000f)),
-                        tables = listOf(InteractableItem("table_1", Rect(300f, 300f, 450f, 400f), displayName = "Table 1")),
-                        collisionSettings = CollisionSettings("AABB", true)
-                    )
                 }
             }
-            viewModel.setMapConfig(config)
+            result.onSuccess { config -> viewModel.setMapConfig(config) }
+                .onFailure { e ->
+                    e.printStackTrace()
+                    viewModel.reportStartupError("Failed to load map_config.json: ${e.message}")
+                }
         }
 
         setContent {

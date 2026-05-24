@@ -16,10 +16,8 @@ import com.example.syncle.domain.PositionSyncEngine
 import com.example.syncle.domain.SpatialAudioEngine
 import com.example.syncle.domain.SyncleLog
 import com.example.syncle.domain.TableMeetingController
-import com.example.syncle.model.TablePresence
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -56,7 +54,6 @@ class SyncleViewModel : ViewModel() {
     private var connectionStatusInternal = ConnectionStatus.DISCONNECTED
 
     private var lastSpeakingIds: Set<String> = emptySet()
-    private var lastNearbyItemId: String? = null
 
     private val _uiState = MutableStateFlow(SyncleUiState())
     val uiState: StateFlow<SyncleUiState> = _uiState.asStateFlow()
@@ -118,6 +115,10 @@ class SyncleViewModel : ViewModel() {
             startupErrorInternal = value
             pushUiState()
         }
+
+    fun reportStartupError(message: String) {
+        startupError = message
+    }
     var connectionStatus: ConnectionStatus
         get() = connectionStatusInternal
         private set(value) {
@@ -541,10 +542,6 @@ class SyncleViewModel : ViewModel() {
                 nearbyItemId = avatarState.nearbyItemId
             )
         )
-        val nearby = avatarState.nearbyItemId
-        if (nearby != lastNearbyItemId) {
-            lastNearbyItemId = nearby
-        }
     }
 
     private companion object {
