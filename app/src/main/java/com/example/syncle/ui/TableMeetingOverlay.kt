@@ -94,7 +94,7 @@ fun TableMeetingOverlay(
             }
         }
 
-        Divider(color = Color(0xFF2E2E34))
+        HorizontalDivider(color = Color(0xFF2E2E34))
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
