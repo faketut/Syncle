@@ -58,6 +58,13 @@ class SyncleViewModel : ViewModel() {
 
     private var lastSpeakingIds: Set<String> = emptySet()
 
+    // Set whenever local position or any input that feeds syncPresence /
+    // updateSpatialAudio changes. The 20 Hz sync loop reads-and-clears this
+    // and short-circuits the expensive per-peer work when the world has not
+    // moved — saving CPU + bandwidth when everyone is parked. Initialized
+    // true so the very first tick after connect publishes a baseline.
+    private val spatialDirty = java.util.concurrent.atomic.AtomicBoolean(true)
+
     // Memoization for MeetingUi.participants. pushUiState() fires on every
     // 50 ms sync tick during a meeting; rebuilding the participants list
     // each time allocated ~20k MeetingParticipant per minute per peer for
@@ -232,6 +239,7 @@ class SyncleViewModel : ViewModel() {
         val cache = mapCache ?: return
         val previousNearby = avatarState.nearbyItemId
         avatarState.move(delta, cache)
+        spatialDirty.set(true)
         if (avatarState.nearbyItemId != previousNearby) {
             pushUiState()
         }
@@ -240,6 +248,7 @@ class SyncleViewModel : ViewModel() {
     fun joinTableMeeting(tableId: String) {
         if (meeting.join(tableId)) {
             mapCache?.invalidateProximityCache()
+            spatialDirty.set(true)
             pushUiState()
         }
     }
@@ -247,6 +256,7 @@ class SyncleViewModel : ViewModel() {
     fun leaveTableMeeting() {
         meeting.leave()
         mapCache?.invalidateProximityCache()
+        spatialDirty.set(true)
         pushUiState()
     }
 
@@ -274,21 +284,30 @@ class SyncleViewModel : ViewModel() {
         syncJob = viewModelScope.launch {
             while (isActive) {
                 val seq = positionSync.nextSequence()
-                positionSync.encodeIfMoved(avatarState.position, seq)?.let { payload ->
+                val payload = positionSync.encodeIfMoved(avatarState.position, seq)
+                if (payload != null) {
                     liveKitService?.publishPosition(payload)
                 }
-                meeting.syncPresence(cache)
-                val acousticTable = cache.resolveLocalAcousticTable(
-                    avatarState.position,
-                    meeting.activeTableMeetingId
-                )
-                liveKitService?.updateSpatialAudio(
-                    peerRegistry.snapshot(),
-                    avatarState,
-                    mapConfig,
-                    acousticTable,
-                    spatialAudio
-                )
+                // syncPresence + updateSpatialAudio iterate every remote
+                // participant and allocate a participantByIdentity map; skip
+                // when neither the local avatar nor any remote target has
+                // moved since the last tick. encodeIfMoved already short-
+                // circuits its own publish, so this just guards the heavy
+                // per-peer work.
+                if (spatialDirty.getAndSet(false)) {
+                    meeting.syncPresence(cache)
+                    val acousticTable = cache.resolveLocalAcousticTable(
+                        avatarState.position,
+                        meeting.activeTableMeetingId
+                    )
+                    liveKitService?.updateSpatialAudio(
+                        peerRegistry.snapshot(),
+                        avatarState,
+                        mapConfig,
+                        acousticTable,
+                        spatialAudio
+                    )
+                }
                 delay(50)
             }
         }
@@ -304,6 +323,9 @@ class SyncleViewModel : ViewModel() {
                         anyMoving = true
                     }
                 }
+                // Peer.position drives spatial volume; keep the sync loop
+                // doing work while any peer is animating toward its target.
+                if (anyMoving) spatialDirty.set(true)
                 delay(if (anyMoving) 16 else 50)
             }
         }
@@ -319,6 +341,7 @@ class SyncleViewModel : ViewModel() {
         if (seq >= peer.lastSequence) {
             peer.targetPosition = position
             peer.lastSequence = seq
+            spatialDirty.set(true)
         }
     }
 
