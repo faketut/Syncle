@@ -119,6 +119,18 @@ class LiveKitService(
                             _events.tryEmit(LiveKitEvent.VideoTrackSubscribed(identity, track))
                         }
                     }
+                    is io.livekit.android.events.RoomEvent.TrackPublished -> {
+                        if (event.participant === currentRoom.localParticipant &&
+                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
+                            _events.tryEmit(LiveKitEvent.LocalVideoTrackChanged)
+                        }
+                    }
+                    is io.livekit.android.events.RoomEvent.TrackUnpublished -> {
+                        if (event.participant === currentRoom.localParticipant &&
+                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
+                            _events.tryEmit(LiveKitEvent.LocalVideoTrackChanged)
+                        }
+                    }
                     is io.livekit.android.events.RoomEvent.TrackSubscriptionFailed -> {
                         val identity = event.participant.identity?.value
                         SyncleLog.w("TrackSubscriptionFailed id=$identity sid=${event.sid} reason=${event.exception.message}")

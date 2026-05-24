@@ -211,6 +211,7 @@ class SyncleViewModel : ViewModel() {
                     is LiveKitEvent.ParticipantConnected -> onParticipantConnected(event.participantId, event.name, event.attributes)
                     is LiveKitEvent.ParticipantDisconnected -> onParticipantDisconnected(event.participantId)
                     is LiveKitEvent.VideoTrackSubscribed -> onVideoTrackSubscribed(event.participantId, event.track)
+                    is LiveKitEvent.LocalVideoTrackChanged -> pushUiState()
                     is LiveKitEvent.ActiveSpeakersChanged -> onActiveSpeakersChanged(event.speakingIds)
                     is LiveKitEvent.ParticipantAttributesChanged -> onParticipantAttributes(event.participantId, event.attributes)
                     is LiveKitEvent.ConnectionQualityChanged -> onConnectionQualityChanged(event.participantId, event.quality)
@@ -249,10 +250,10 @@ class SyncleViewModel : ViewModel() {
     fun toggleMeetingCamera() {
         meeting.toggleCamera()
         pushUiState()
-        viewModelScope.launch {
-            delay(300)
-            pushUiState()
-        }
+        // No need to schedule a delayed re-push for the local video tile: when
+        // the camera track actually publishes (or unpublishes), the SDK fires
+        // LocalTrackPublished / LocalTrackUnpublished and we re-push from
+        // collectLiveKitEvents().
     }
 
     private fun startLoops(cache: MapConfigCache) {

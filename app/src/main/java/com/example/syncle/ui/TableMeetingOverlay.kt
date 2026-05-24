@@ -181,9 +181,9 @@ private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?)
             .background(Color(0xFF25252C))
             .border(2.dp, borderColor, RoundedCornerShape(10.dp))
     ) {
-        if (showVideo) {
+        if (showVideo && room != null) {
             SyncleVideoRenderer(
-                room = room!!,
+                room = room,
                 videoTrack = participant.videoTrack,
                 modifier = Modifier.fillMaxSize(),
                 mirror = participant.isLocal

@@ -16,6 +16,8 @@ sealed class LiveKitEvent {
     ) : LiveKitEvent()
     data class ParticipantDisconnected(val participantId: String) : LiveKitEvent()
     data class VideoTrackSubscribed(val participantId: String, val track: VideoTrack) : LiveKitEvent()
+    /** Emitted when the LocalParticipant publishes or unpublishes its camera track. */
+    object LocalVideoTrackChanged : LiveKitEvent()
     data class ActiveSpeakersChanged(val speakingIds: Set<String>) : LiveKitEvent()
     data class ParticipantAttributesChanged(val participantId: String, val attributes: Map<String, String>) : LiveKitEvent()
     data class ConnectionQualityChanged(val participantId: String, val quality: ConnectionQuality) : LiveKitEvent()
