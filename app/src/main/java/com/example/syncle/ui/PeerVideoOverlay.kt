@@ -70,7 +70,7 @@ fun VideoBox(room: Room, peer: RemotePeer) {
             )
         }
         Text(
-            text = peer.name,
+            text = peer.displayName,
             color = Color.White,
             fontSize = 10.sp,
             modifier = Modifier.padding(4.dp).background(Color.Black.copy(alpha = 0.5f))

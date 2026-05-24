@@ -59,7 +59,7 @@ class LiveKitService(
                 // were published before our connect (no "changed" event will fire for them).
                 currentRoom.remoteParticipants.values.forEach { p ->
                     val identity = p.identity?.value ?: return@forEach
-                    _events.tryEmit(LiveKitEvent.ParticipantConnected(identity, p.attributes))
+                    _events.tryEmit(LiveKitEvent.ParticipantConnected(identity, p.name, p.attributes))
                 }
                 LiveKitConnectResult(success = true)
             } catch (e: Exception) {
@@ -83,7 +83,11 @@ class LiveKitService(
                     is io.livekit.android.events.RoomEvent.ParticipantConnected -> {
                         val identity = event.participant.identity?.value ?: return@collect
                         _events.tryEmit(
-                            LiveKitEvent.ParticipantConnected(identity, event.participant.attributes)
+                            LiveKitEvent.ParticipantConnected(
+                                identity,
+                                event.participant.name,
+                                event.participant.attributes
+                            )
                         )
                     }
                     is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {

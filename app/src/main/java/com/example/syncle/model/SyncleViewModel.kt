@@ -190,7 +190,7 @@ class SyncleViewModel : ViewModel() {
             service.events.collect { event ->
                 when (event) {
                     is LiveKitEvent.DataReceived -> onDataReceived(event.participantId, event.data)
-                    is LiveKitEvent.ParticipantConnected -> onParticipantConnected(event.participantId, event.attributes)
+                    is LiveKitEvent.ParticipantConnected -> onParticipantConnected(event.participantId, event.name, event.attributes)
                     is LiveKitEvent.ParticipantDisconnected -> onParticipantDisconnected(event.participantId)
                     is LiveKitEvent.VideoTrackSubscribed -> onVideoTrackSubscribed(event.participantId, event.track)
                     is LiveKitEvent.ActiveSpeakersChanged -> onActiveSpeakersChanged(event.speakingIds)
@@ -295,13 +295,16 @@ class SyncleViewModel : ViewModel() {
         }
     }
 
-    private fun onParticipantConnected(id: String, attributes: Map<String, String>) {
+    private fun onParticipantConnected(id: String, name: String?, attributes: Map<String, String>) {
         // Register the peer immediately so they're visible even before they move
         // (no position packets) or change any attribute (initial attrs are already published).
-        peerRegistry.getOrCreate(id)
+        val peer = peerRegistry.getOrCreate(id)
+        if (!name.isNullOrBlank() && peer.displayName != name) {
+            peer.displayName = name
+        }
         onParticipantAttributes(id, attributes)
         pushUiState()
-        SyncleLog.d("Participant connected id=$id attrs=${attributes.keys}")
+        SyncleLog.d("Participant connected id=$id name=$name attrs=${attributes.keys}")
     }
 
     private fun onParticipantDisconnected(id: String) {

@@ -256,7 +256,7 @@ fun buildMeetingParticipants(
         list.add(
             MeetingParticipant(
                 id = peer.id,
-                displayName = peer.name,
+                displayName = peer.displayName,
                 isLocal = false,
                 isSpeaking = peer.isSpeaking,
                 isMicMuted = peer.status == com.example.syncle.model.UserStatus.QUIET_MODE,

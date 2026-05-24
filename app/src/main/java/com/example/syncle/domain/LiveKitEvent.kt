@@ -9,7 +9,11 @@ sealed class LiveKitEvent {
         override fun hashCode() = 31 * participantId.hashCode() + data.contentHashCode()
     }
 
-    data class ParticipantConnected(val participantId: String, val attributes: Map<String, String>) : LiveKitEvent()
+    data class ParticipantConnected(
+        val participantId: String,
+        val name: String?,
+        val attributes: Map<String, String>
+    ) : LiveKitEvent()
     data class ParticipantDisconnected(val participantId: String) : LiveKitEvent()
     data class VideoTrackSubscribed(val participantId: String, val track: VideoTrack) : LiveKitEvent()
     data class ActiveSpeakersChanged(val speakingIds: Set<String>) : LiveKitEvent()
