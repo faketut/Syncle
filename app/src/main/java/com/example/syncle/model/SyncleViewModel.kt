@@ -166,29 +166,6 @@ class SyncleViewModel : ViewModel() {
         collectLiveKitEvents(service)
 
         viewModelScope.launch {
-            // Always re-fetch a fresh token immediately before connecting so an
-            // expired token (TTL=1h) from a previous autoFetchSession never
-            // causes a 401 on the LiveKit websocket handshake.
-            val deviceId = DeviceIdStore(context).getOrCreate()
-            val profile = sessionProfile ?: ProfileStore(context).get()
-            val freshDetails = authRepository.fetchSession(
-                deviceId = deviceId,
-                nickname = profile.nickname,
-                color = profile.color,
-                room = sessionRoom,
-            )
-            if (freshDetails != null) {
-                urlInternal = freshDetails.serverUrl
-                tokenInternal = freshDetails.token
-                sessionUserId = freshDetails.userId
-            } else {
-                connectionStatus = ConnectionStatus.ERROR
-                lastConnectErrorInternal =
-                    "Failed to refresh session token. Check backend connectivity."
-                SyncleLog.w("Token refresh before connect returned null")
-                pushUiState()
-                return@launch
-            }
             val result = service.connect(urlInternal, tokenInternal)
             if (result.success) {
                 connectionStatus = ConnectionStatus.CONNECTED
@@ -213,6 +190,7 @@ class SyncleViewModel : ViewModel() {
             service.events.collect { event ->
                 when (event) {
                     is LiveKitEvent.DataReceived -> onDataReceived(event.participantId, event.data)
+                    is LiveKitEvent.ParticipantConnected -> onParticipantConnected(event.participantId, event.attributes)
                     is LiveKitEvent.ParticipantDisconnected -> onParticipantDisconnected(event.participantId)
                     is LiveKitEvent.VideoTrackSubscribed -> onVideoTrackSubscribed(event.participantId, event.track)
                     is LiveKitEvent.ActiveSpeakersChanged -> onActiveSpeakersChanged(event.speakingIds)
@@ -317,6 +295,15 @@ class SyncleViewModel : ViewModel() {
         }
     }
 
+    private fun onParticipantConnected(id: String, attributes: Map<String, String>) {
+        // Register the peer immediately so they're visible even before they move
+        // (no position packets) or change any attribute (initial attrs are already published).
+        peerRegistry.getOrCreate(id)
+        onParticipantAttributes(id, attributes)
+        pushUiState()
+        SyncleLog.d("Participant connected id=$id attrs=${attributes.keys}")
+    }
+
     private fun onParticipantDisconnected(id: String) {
         spatialAudio.clearPeer(id)
         peerRegistry.remove(id)
@@ -341,7 +328,9 @@ class SyncleViewModel : ViewModel() {
     }
 
     private fun onParticipantAttributes(id: String, attributes: Map<String, String>) {
-        val peer = peerRegistry.get(id) ?: return
+        // Use getOrCreate so that an attribute event arriving before any position/connect
+        // event still materializes the peer.
+        val peer = peerRegistry.getOrCreate(id)
         var changed = false
         val statusStr = attributes["status"]
         if (statusStr != null) {

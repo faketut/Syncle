@@ -54,6 +54,13 @@ class LiveKitService(
                 setupRoomListener(currentRoom)
                 currentRoom.connect(url = trimmedUrl, token = trimmedToken)
                 currentRoom.localParticipant.setMicrophoneEnabled(true)
+                // Replay existing participants so peers who joined before us appear immediately,
+                // even if they aren't currently moving (no position packets) and their attributes
+                // were published before our connect (no "changed" event will fire for them).
+                currentRoom.remoteParticipants.values.forEach { p ->
+                    val identity = p.identity?.value ?: return@forEach
+                    _events.tryEmit(LiveKitEvent.ParticipantConnected(identity, p.attributes))
+                }
                 LiveKitConnectResult(success = true)
             } catch (e: Exception) {
                 SyncleLog.e("LiveKit connect failed (url=$trimmedUrl)", e)
@@ -72,6 +79,12 @@ class LiveKitService(
                     is io.livekit.android.events.RoomEvent.DataReceived -> {
                         val identity = event.participant?.identity?.value ?: return@collect
                         _events.tryEmit(LiveKitEvent.DataReceived(identity, event.data))
+                    }
+                    is io.livekit.android.events.RoomEvent.ParticipantConnected -> {
+                        val identity = event.participant.identity?.value ?: return@collect
+                        _events.tryEmit(
+                            LiveKitEvent.ParticipantConnected(identity, event.participant.attributes)
+                        )
                     }
                     is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {
                         val identity = event.participant.identity?.value ?: return@collect
