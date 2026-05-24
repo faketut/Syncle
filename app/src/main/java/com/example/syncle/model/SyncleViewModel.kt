@@ -16,6 +16,12 @@ import com.example.syncle.domain.PositionSyncEngine
 import com.example.syncle.domain.SpatialAudioEngine
 import com.example.syncle.domain.SyncleLog
 import com.example.syncle.domain.TableMeetingController
+import com.example.syncle.ui.buildMeetingParticipants
+import com.example.syncle.ui.state.ConnectionStatus
+import com.example.syncle.ui.state.ConnectionUi
+import com.example.syncle.ui.state.LocalAvatarUi
+import com.example.syncle.ui.state.MeetingUi
+import com.example.syncle.ui.state.SyncleUiState
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.CoroutineScope
@@ -575,11 +581,13 @@ class SyncleViewModel : ViewModel() {
             if (key == participantsCacheKey) {
                 participantsCache
             } else {
-                val fresh = meeting.buildParticipants(
-                    cache,
-                    peerRegistry.snapshot(),
-                    localIdentity,
-                    localVideo
+                val fresh = buildMeetingParticipants(
+                    localAvatar = avatarState,
+                    localIdentity = localIdentity,
+                    localMicEnabled = meeting.meetingMicEnabled,
+                    localCameraEnabled = meeting.meetingCameraEnabled,
+                    localVideoTrack = localVideo,
+                    tablePeers = meeting.peersAtTable(meetingId, cache.config, peerRegistry.snapshot())
                 )
                 participantsCacheKey = key
                 participantsCache = fresh

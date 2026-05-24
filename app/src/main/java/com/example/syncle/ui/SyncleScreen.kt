@@ -15,7 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.syncle.model.AvatarState
 import com.example.syncle.model.MapConfig
 import com.example.syncle.model.RemotePeer
-import com.example.syncle.model.SyncleUiState
+import com.example.syncle.ui.state.SyncleUiState
 import com.example.syncle.model.SyncleViewModel
 import io.livekit.android.room.Room
 
