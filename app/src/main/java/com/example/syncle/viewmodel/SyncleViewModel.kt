@@ -269,7 +269,12 @@ class SyncleViewModel : ViewModel() {
 
     private fun startSyncLoop(cache: MapConfigCache) {
         val mapConfig = cache.config
-        syncJob = viewModelScope.launch {
+        // #34: 20 Hz loop runs on Dispatchers.Default so it doesn't share the
+        // Main thread with Compose recomposition and input handling. All work
+        // inside is either pure Kotlin (positionSync, meeting state,
+        // MapConfigCache), atomic (spatialDirty), or LiveKit SDK calls that
+        // are safe off the main thread (publishData / track volume).
+        syncJob = viewModelScope.launch(Dispatchers.Default) {
             while (isActive) {
                 val seq = positionSync.nextSequence()
                 val payload = positionSync.encodeIfMoved(avatarState.position, seq)
@@ -302,7 +307,9 @@ class SyncleViewModel : ViewModel() {
     }
 
     private fun startInterpolationLoop() {
-        lerpJob = viewModelScope.launch {
+        // #34: same rationale as startSyncLoop — peer interpolation math
+        // and the spatialDirty toggle don't need the Main thread.
+        lerpJob = viewModelScope.launch(Dispatchers.Default) {
             while (isActive) {
                 var anyMoving = false
                 peerRegistry.forEach { peer ->
