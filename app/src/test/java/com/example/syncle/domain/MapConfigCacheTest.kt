@@ -39,4 +39,14 @@ class MapConfigCacheTest {
         val cache = MapConfigCache(map)
         assertEquals("meeting", cache.resolveLocalAcousticTable(Offset(10f, 10f), "meeting"))
     }
+
+    @Test
+    fun computeMapBounds_handlesNegativeCoordinates() {
+        // Regression: seeding right/bottom with Float.MIN_VALUE (smallest
+        // positive float) instead of -Float.MAX_VALUE produced bounds where
+        // right/bottom collapsed to ~0 for negative-coord walkable rects.
+        val rect = Rect(-200f, -150f, -50f, -25f)
+        val bounds = MapConfig.computeMapBounds(listOf(rect))
+        assertEquals(rect, bounds)
+    }
 }

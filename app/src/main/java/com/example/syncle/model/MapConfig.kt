@@ -27,8 +27,12 @@ data class MapConfig(
             if (walkableAreas.isEmpty()) return Rect(0f, 0f, 1000f, 1000f)
             var left = Float.MAX_VALUE
             var top = Float.MAX_VALUE
-            var right = Float.MIN_VALUE
-            var bottom = Float.MIN_VALUE
+            // Seed maxes with -Float.MAX_VALUE (most negative), NOT
+            // Float.MIN_VALUE (which is the smallest positive float ~1.4e-45).
+            // The old seed silently produced wrong bounds for any walkable
+            // rect with a negative right/bottom.
+            var right = -Float.MAX_VALUE
+            var bottom = -Float.MAX_VALUE
             walkableAreas.forEach { r ->
                 left = minOf(left, r.left)
                 top = minOf(top, r.top)

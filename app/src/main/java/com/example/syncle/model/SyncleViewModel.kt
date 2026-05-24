@@ -58,6 +58,14 @@ class SyncleViewModel : ViewModel() {
 
     private var lastSpeakingIds: Set<String> = emptySet()
 
+    // Memoization for MeetingUi.participants. pushUiState() fires on every
+    // 50 ms sync tick during a meeting; rebuilding the participants list
+    // each time allocated ~20k MeetingParticipant per minute per peer for
+    // zero visible change. Reuse the prior list reference when none of the
+    // inputs feeding into buildMeetingParticipants have changed.
+    private var participantsCacheKey: ParticipantsKey? = null
+    private var participantsCache: List<com.example.syncle.ui.MeetingParticipant> = emptyList()
+
     private val _uiState = MutableStateFlow(SyncleUiState())
     val uiState: StateFlow<SyncleUiState> = _uiState.asStateFlow()
 
@@ -338,6 +346,10 @@ class SyncleViewModel : ViewModel() {
 
     private fun onVideoTrackSubscribed(id: String, track: io.livekit.android.room.track.VideoTrack) {
         peerRegistry.getOrCreate(id).videoTrack = track
+        // Bump registry revision so pushUiState()'s participant cache key
+        // changes; otherwise a new remote video tile won't appear until some
+        // other peer field also changes.
+        peerRegistry.markChanged()
         pushUiState()
     }
 
@@ -346,10 +358,15 @@ class SyncleViewModel : ViewModel() {
         lastSpeakingIds = speakingIds
         val localIdentity = liveKitService?.getLocalIdentity()
         avatarState.isSpeaking = localIdentity != null && speakingIds.contains(localIdentity)
+        var anyPeerChanged = false
         peerRegistry.forEach { peer ->
             val speaking = speakingIds.contains(peer.id)
-            if (peer.isSpeaking != speaking) peer.isSpeaking = speaking
+            if (peer.isSpeaking != speaking) {
+                peer.isSpeaking = speaking
+                anyPeerChanged = true
+            }
         }
+        if (anyPeerChanged) peerRegistry.markChanged()
         pushUiState()
     }
 
@@ -540,14 +557,38 @@ class SyncleViewModel : ViewModel() {
         val config = mapConfig
         val ready = mapReady ?: (config != null)
         val meetingId = meeting.activeTableMeetingId
-        val participants = mapCache?.let {
-            meeting.buildParticipants(
-                it,
-                peerRegistry.snapshot(),
-                liveKitService?.getLocalIdentity(),
-                liveKitService?.getLocalVideoTrack()
+        val cache = mapCache
+        val localIdentity = liveKitService?.getLocalIdentity()
+        val localVideo = liveKitService?.getLocalVideoTrack()
+        val participants = if (cache == null || meetingId == null) {
+            participantsCacheKey = null
+            participantsCache = emptyList()
+            emptyList()
+        } else {
+            val key = ParticipantsKey(
+                meetingId = meetingId,
+                micEnabled = meeting.meetingMicEnabled,
+                cameraEnabled = meeting.meetingCameraEnabled,
+                localIdentity = localIdentity,
+                localVideoTrack = localVideo,
+                peerRevision = peerRegistry.revision.value,
+                localName = avatarState.name,
+                localSpeaking = avatarState.isSpeaking,
             )
-        } ?: emptyList()
+            if (key == participantsCacheKey) {
+                participantsCache
+            } else {
+                val fresh = meeting.buildParticipants(
+                    cache,
+                    peerRegistry.snapshot(),
+                    localIdentity,
+                    localVideo
+                )
+                participantsCacheKey = key
+                participantsCache = fresh
+                fresh
+            }
+        }
         _uiState.value = SyncleUiState(
             mapReady = ready,
             connection = ConnectionUi(
@@ -577,3 +618,14 @@ class SyncleViewModel : ViewModel() {
         const val REPORTER_INTERVAL_MS = 10_000L
     }
 }
+
+private data class ParticipantsKey(
+    val meetingId: String,
+    val micEnabled: Boolean,
+    val cameraEnabled: Boolean,
+    val localIdentity: String?,
+    val localVideoTrack: io.livekit.android.room.track.VideoTrack?,
+    val peerRevision: Long,
+    val localName: String,
+    val localSpeaking: Boolean,
+)
