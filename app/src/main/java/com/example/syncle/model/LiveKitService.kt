@@ -6,7 +6,6 @@ import com.example.syncle.domain.SpatialAudioEngine
 import com.example.syncle.domain.SyncleLog
 import io.livekit.android.LiveKit
 import io.livekit.android.RoomOptions
-import io.livekit.android.util.LoggingLevel
 import io.livekit.android.events.collect
 import io.livekit.android.room.Room
 import io.livekit.android.room.participant.Participant
@@ -44,7 +43,6 @@ class LiveKitService(
                 )
             }
             try {
-                LiveKit.loggingLevel = LoggingLevel.DEBUG
                 val currentRoom = LiveKit.create(
                     appContext = context.applicationContext,
                     options = RoomOptions(
@@ -89,8 +87,6 @@ class LiveKitService(
     private fun setupRoomListener(currentRoom: Room) {
         serviceScope.launch {
             currentRoom.events.collect { event ->
-                // Wildcard diagnostic: confirm WHICH event types the SDK is delivering.
-                SyncleLog.d("RoomEvent ${event.javaClass.simpleName}")
                 when (event) {
                     is io.livekit.android.events.RoomEvent.DataReceived -> {
                         val identity = event.participant?.identity?.value ?: return@collect
@@ -113,18 +109,9 @@ class LiveKitService(
                     is io.livekit.android.events.RoomEvent.TrackSubscribed -> {
                         val track = event.track
                         val identity = event.participant.identity?.value
-                        SyncleLog.d("TrackSubscribed id=$identity kind=${track.javaClass.simpleName} sid=${event.publication.sid}")
                         if (track is RemoteVideoTrack && identity != null) {
                             _events.tryEmit(LiveKitEvent.VideoTrackSubscribed(identity, track))
                         }
-                    }
-                    is io.livekit.android.events.RoomEvent.TrackUnsubscribed -> {
-                        val identity = event.participant.identity?.value
-                        SyncleLog.d("TrackUnsubscribed id=$identity sid=${event.publications.sid}")
-                    }
-                    is io.livekit.android.events.RoomEvent.TrackPublished -> {
-                        val identity = event.participant.identity?.value
-                        SyncleLog.d("TrackPublished id=$identity sid=${event.publication.sid} kind=${event.publication.kind}")
                     }
                     is io.livekit.android.events.RoomEvent.TrackSubscriptionFailed -> {
                         val identity = event.participant.identity?.value
@@ -196,30 +183,6 @@ class LiveKitService(
     }
 
     fun getRoom(): Room? = room
-
-    /**
-     * Scan all remote participants for video tracks whose Track instance is
-     * already available (subscribed at the SDK level) and re-emit
-     * VideoTrackSubscribed. This is a safety net for cases where the
-     * TrackSubscribed RoomEvent isn't delivered (race during connect, or
-     * SDK quirk under adaptiveStream/dynacast).
-     */
-    fun rescanVideoTracks() {
-        val currentRoom = room ?: return
-        currentRoom.remoteParticipants.values.forEach { p ->
-            val identity = p.identity?.value ?: return@forEach
-            p.trackPublications.values.forEach { pub ->
-                val track = pub.track
-                if (track is RemoteVideoTrack) {
-                    SyncleLog.d("rescan found video id=$identity sid=${pub.sid} subscribed=${pub.subscribed}")
-                    _events.tryEmit(LiveKitEvent.VideoTrackSubscribed(identity, track))
-                } else if (pub.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
-                    SyncleLog.d("rescan video pub but track is null id=$identity sid=${pub.sid} subscribed=${pub.subscribed}")
-                    // Track instance not yet materialized — subscription pending.
-                }
-            }
-        }
-    }
 
     fun getLocalIdentity(): String? = room?.localParticipant?.identity?.value
 

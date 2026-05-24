@@ -323,7 +323,6 @@ class SyncleViewModel : ViewModel() {
         // shows up in the existing user's UI as soon as they post their first state.
         seedFromSnapshot()
         pushUiState()
-        SyncleLog.d("Participant connected id=$id name=$name attrs=${attributes.keys}")
     }
 
     private fun onParticipantDisconnected(id: String) {
@@ -353,7 +352,7 @@ class SyncleViewModel : ViewModel() {
         // Use getOrCreate so that an attribute event arriving before any position/connect
         // event still materializes the peer.
         val peer = peerRegistry.getOrCreate(id)
-        SyncleLog.d("onParticipantAttributes id=$id attrs=$attributes peer.tableBefore=${peer.tableMeetingId}")
+
         var changed = false
         val statusStr = attributes["status"]
         if (statusStr != null) {
@@ -452,8 +451,6 @@ class SyncleViewModel : ViewModel() {
                 // attribute / data events are delayed or dropped. Backend is the
                 // source of truth.
                 seedFromSnapshot()
-                // Safety net for missing TrackSubscribed events.
-                liveKitService?.rescanVideoTracks()
                 delay(REPORTER_INTERVAL_MS)
             }
         }
@@ -522,9 +519,6 @@ class SyncleViewModel : ViewModel() {
                 liveKitService?.getLocalVideoTrack()
             )
         } ?: emptyList()
-        if (meetingId != null) {
-            SyncleLog.d("pushUiState activeTable=$meetingId participants=${participants.size} peers=${peerRegistry.snapshot().map { "${it.id.take(8)}:t=${it.tableMeetingId}:vt=${it.videoTrack != null}" }}")
-        }
         _uiState.value = SyncleUiState(
             mapReady = ready,
             connection = ConnectionUi(
