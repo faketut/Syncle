@@ -25,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -45,6 +46,7 @@ class SyncleViewModel : ViewModel() {
     private var syncJob: Job? = null
     private var lerpJob: Job? = null
     private var eventsJob: Job? = null
+    private var derivedUiJob: Job? = null
 
     private var urlInternal = ""
     private var tokenInternal = ""
@@ -66,6 +68,18 @@ class SyncleViewModel : ViewModel() {
     private var sessionProfile: Profile? = null
     private var sessionRoom: String = "syncle-office"
     private var reporterJob: Job? = null
+
+    init {
+        // Reactively rebuild UI whenever the peer registry or the active
+        // table id changes. This is a safety net so that even if a future
+        // code path forgets to call pushUiState(), the meeting room
+        // participant list (which is derived from peerRegistry.snapshot()
+        // and meeting.activeTableMeetingId) still stays in sync.
+        derivedUiJob = viewModelScope.launch {
+            combine(peerRegistry.revision, meeting.activeTableIdFlow) { _, _ -> Unit }
+                .collect { pushUiState() }
+        }
+    }
 
     fun setMapConfig(config: MapConfig) {
         mapConfig = config
@@ -301,6 +315,7 @@ class SyncleViewModel : ViewModel() {
         val peer = peerRegistry.getOrCreate(id)
         if (!name.isNullOrBlank() && peer.displayName != name) {
             peer.displayName = name
+            peerRegistry.markChanged()
         }
         onParticipantAttributes(id, attributes)
         // Snapshot may have new info (tableId, position, color) that the LiveKit
@@ -365,7 +380,10 @@ class SyncleViewModel : ViewModel() {
                 changed = true
             }
         }
-        if (changed) pushUiState()
+        if (changed) {
+            peerRegistry.markChanged()
+            pushUiState()
+        }
     }
 
     private fun publishLocalProfileAttribute() {
@@ -377,19 +395,41 @@ class SyncleViewModel : ViewModel() {
         val selfId = sessionUserId
         viewModelScope.launch {
             val peers = snapshotApi.fetch(sessionRoom)
+            var changed = false
             peers.asSequence()
                 .filter { it.userId != selfId }
                 .forEach { snap ->
                     val pos = Offset(snap.x, snap.y)
+                    // For new peers, seed position from snapshot. For peers we
+                    // already track, do NOT overwrite position once LiveKit
+                    // data packets have started arriving (lastSequence >= 0) —
+                    // otherwise snapshot clobbers in-flight interpolation and
+                    // causes visible jitter / jumps.
+                    val isNew = peerRegistry.get(snap.userId) == null
                     val peer = peerRegistry.getOrCreate(snap.userId, pos)
-                    peer.displayName = snap.nickname
-                    peer.color = snap.color
-                    peer.targetPosition = pos
-                    peer.position = pos
-                    peer.tableMeetingId = snap.tableId
+                    if (peer.displayName != snap.nickname) {
+                        peer.displayName = snap.nickname
+                        changed = true
+                    }
+                    if (peer.color != snap.color) {
+                        peer.color = snap.color
+                        changed = true
+                    }
+                    if (peer.tableMeetingId != snap.tableId) {
+                        peer.tableMeetingId = snap.tableId
+                        changed = true
+                    }
+                    if (isNew || peer.lastSequence < 0) {
+                        peer.targetPosition = pos
+                        peer.position = pos
+                        changed = true
+                    }
                 }
-            if (peers.isNotEmpty()) pushUiState()
-            SyncleLog.d("Snapshot seeded peers=${peers.size}")
+            if (changed) {
+                peerRegistry.markChanged()
+                pushUiState()
+            }
+            SyncleLog.d("Snapshot seeded peers=${peers.size} changed=$changed")
         }
     }
 
@@ -472,6 +512,17 @@ class SyncleViewModel : ViewModel() {
         val config = mapConfig
         val ready = mapReady ?: (config != null)
         val meetingId = meeting.activeTableMeetingId
+        val participants = mapCache?.let {
+            meeting.buildParticipants(
+                it,
+                peerRegistry.snapshot(),
+                liveKitService?.getLocalIdentity(),
+                liveKitService?.getLocalVideoTrack()
+            )
+        } ?: emptyList()
+        if (meetingId != null) {
+            SyncleLog.d("pushUiState activeTable=$meetingId participants=${participants.size} peers=${peerRegistry.snapshot().map { "${it.id.take(8)}:t=${it.tableMeetingId}:vt=${it.videoTrack != null}" }}")
+        }
         _uiState.value = SyncleUiState(
             mapReady = ready,
             connection = ConnectionUi(
@@ -485,14 +536,7 @@ class SyncleViewModel : ViewModel() {
             meeting = MeetingUi(
                 activeTableId = meetingId,
                 tableTitle = meetingId?.let { id -> config?.let { meeting.tableDisplayName(id, it) } },
-                participants = mapCache?.let {
-                    meeting.buildParticipants(
-                        it,
-                        peerRegistry.snapshot(),
-                        liveKitService?.getLocalIdentity(),
-                        liveKitService?.getLocalVideoTrack()
-                    )
-                } ?: emptyList(),
+                participants = participants,
                 micEnabled = meeting.meetingMicEnabled,
                 cameraEnabled = meeting.meetingCameraEnabled
             ),

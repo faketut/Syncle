@@ -8,11 +8,17 @@ import com.example.syncle.model.TablePresence
 import com.example.syncle.ui.MeetingParticipant
 import com.example.syncle.ui.buildMeetingParticipants
 import io.livekit.android.room.track.VideoTrack
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 class TableMeetingController(
     private val avatarState: AvatarState,
     private val liveKit: () -> LiveKitService?
 ) {
+    private val _activeTableIdFlow = MutableStateFlow<String?>(null)
+    val activeTableIdFlow: StateFlow<String?> = _activeTableIdFlow.asStateFlow()
+
     var activeTableMeetingId: String? = null
         private set
 
@@ -25,6 +31,7 @@ class TableMeetingController(
     fun join(tableId: String): Boolean {
         if (avatarState.nearbyItemId != tableId) return false
         activeTableMeetingId = tableId
+        _activeTableIdFlow.value = tableId
         meetingCameraEnabled = true
         liveKit()?.setLocalAttributes(mapOf(TablePresence.ATTR_TABLE_ID to tableId))
         liveKit()?.setCameraEnabled(true)
@@ -33,6 +40,7 @@ class TableMeetingController(
 
     fun leave() {
         activeTableMeetingId = null
+        _activeTableIdFlow.value = null
         meetingCameraEnabled = false
         liveKit()?.setLocalAttributes(mapOf(TablePresence.ATTR_TABLE_ID to ""))
         liveKit()?.setCameraEnabled(false)
@@ -85,6 +93,7 @@ class TableMeetingController(
 
     fun reset() {
         activeTableMeetingId = null
+        _activeTableIdFlow.value = null
         meetingCameraEnabled = false
         meetingMicEnabled = true
     }
