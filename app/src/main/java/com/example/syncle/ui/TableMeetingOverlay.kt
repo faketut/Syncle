@@ -94,7 +94,7 @@ fun TableMeetingOverlay(
             }
         }
 
-        Divider(color = Color(0xFF2E2E34))
+        HorizontalDivider(color = Color(0xFF2E2E34))
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
@@ -181,9 +181,9 @@ private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?)
             .background(Color(0xFF25252C))
             .border(2.dp, borderColor, RoundedCornerShape(10.dp))
     ) {
-        if (showVideo) {
+        if (showVideo && room != null) {
             SyncleVideoRenderer(
-                room = room!!,
+                room = room,
                 videoTrack = participant.videoTrack,
                 modifier = Modifier.fillMaxSize(),
                 mirror = participant.isLocal
@@ -256,7 +256,7 @@ fun buildMeetingParticipants(
         list.add(
             MeetingParticipant(
                 id = peer.id,
-                displayName = peer.name,
+                displayName = peer.displayName,
                 isLocal = false,
                 isSpeaking = peer.isSpeaking,
                 isMicMuted = peer.status == com.example.syncle.model.UserStatus.QUIET_MODE,

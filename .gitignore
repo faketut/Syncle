@@ -6,6 +6,14 @@ build/
 # Local machine & secrets
 local.properties
 
+# OS cruft
+.DS_Store
+
+# Node / backend
+node_modules/
+server/data/
+server/dist/
+
 # JVM diagnostics (never commit)
 *.hprof
 *.log

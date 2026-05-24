@@ -10,8 +10,15 @@ import io.livekit.android.room.track.VideoTrack
 class RemotePeer(
     val id: String,
     val name: String,
-    initialPosition: Offset = Offset.Zero
+    initialPosition: Offset = Offset.Zero,
+    initialColor: String = "#888888",
 ) {
+    /** Display name (nickname). Mutable so a snapshot pre-seed can refine it later. */
+    var displayName by mutableStateOf(name)
+
+    /** Accent color from backend / LiveKit attribute (e.g. "#4F8EF7"). */
+    var color by mutableStateOf(initialColor)
+
     // position is the "smoothed" position used for rendering
     var position by mutableStateOf(initialPosition)
     

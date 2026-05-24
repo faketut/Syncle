@@ -22,10 +22,12 @@ object TablePresence {
 
     fun tableIdForJoinTap(playerPosition: Offset, tapWorld: Offset, mapConfig: MapConfig): String? {
         return mapConfig.tables
-            .map { it.id to distanceToRect(tapWorld, it.rect) }
-            .filter { (id, tapDist) ->
-                tapDist <= TAP_JOIN_HIT_THRESHOLD &&
-                    distanceToRect(playerPosition, mapConfig.tablesById[id]!!.rect) < INTERACTION_THRESHOLD
+            .mapNotNull { table ->
+                val tapDist = distanceToRect(tapWorld, table.rect)
+                if (tapDist > TAP_JOIN_HIT_THRESHOLD) return@mapNotNull null
+                val playerDist = distanceToRect(playerPosition, table.rect)
+                if (playerDist >= INTERACTION_THRESHOLD) return@mapNotNull null
+                table.id to tapDist
             }
             .minByOrNull { (_, tapDist) -> tapDist }
             ?.first

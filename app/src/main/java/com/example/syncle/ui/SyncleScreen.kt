@@ -15,7 +15,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.syncle.model.AvatarState
 import com.example.syncle.model.MapConfig
 import com.example.syncle.model.RemotePeer
-import com.example.syncle.model.SyncleUiState
+import com.example.syncle.ui.state.SyncleUiState
 import com.example.syncle.model.SyncleViewModel
 import io.livekit.android.room.Room
 
@@ -34,17 +34,16 @@ fun SyncleScreen(
 ) {
     val meeting = uiState.meeting
     val activeTableId = meeting.activeTableId
-    val backgroundImage = rememberMapBackgroundImage(mapConfig.backgroundImage)
+    val backgroundImage = rememberMapBackground(mapConfig.backgroundImage)
     val logicWorldSize = remember(mapConfig, backgroundImage) {
-        backgroundImage?.let { Size(it.width.toFloat(), it.height.toFloat()) }
-            ?: mapConfig.mapDrawSize
+        backgroundImage?.logicalSize ?: mapConfig.mapDrawSize
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         SpatialCanvas(
             mapConfig = mapConfig,
             logicWorldSize = logicWorldSize,
-            backgroundImage = backgroundImage,
+            backgroundImage = backgroundImage?.image,
             avatarState = avatarState,
             remotePeers = remotePeers,
             onMove = onMove,

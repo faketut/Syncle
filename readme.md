@@ -122,18 +122,25 @@ gather/
 ### Quick start
 
 1. Clone the repo and open the project in **Android Studio**.
-2. Create or edit **`local.properties`** at the repo root (see Android template for `sdk.dir`):
+2. Start the backend (signs LiveKit tokens, stores per-room snapshots):
+
+   ```bash
+   docker compose up --build      # starts livekit-server --dev + Syncle backend on :8787
+   ```
+
+3. Create or edit **`local.properties`** at the repo root (`sdk.dir` per your machine):
 
    ```properties
    sdk.dir=C\:\\path\\to\\Android\\Sdk
-   livekit.sandbox_id=your-livekit-sandbox-id
+   # Where the Android app reaches the Syncle backend. 10.0.2.2 = emulator host loopback.
+   syncle.backend_url=http://10.0.2.2:8787
    ```
 
-3. **Sync Gradle**, then **Run** `app` on a device or emulator.
-4. Grant **camera** and **microphone** when prompted.
-5. Optional: `./gradlew :app:testDebugUnitTest` for unit tests.
+4. **Sync Gradle**, then **Run** `app` on a device or emulator.
+5. Grant **camera** and **microphone** when prompted.
+6. Optional: `./gradlew :app:testDebugUnitTest` for unit tests; `cd server && npm test` for backend tests.
 
-Use a [LiveKit Cloud Sandbox](https://cloud.livekit.io/) ID that matches your project; after changing `livekit.sandbox_id`, run **Rebuild** so `BuildConfig.LIVEKIT_SANDBOX_ID` updates.
+The backend signs LiveKit JWTs against a stable `userId` derived from the device's persisted UUID, so the same install keeps the same identity across restarts. See [server/README.md](server/README.md) for endpoint details.
 
 ---
 
@@ -186,18 +193,25 @@ gather/
 ### 快速开始
 
 1. 克隆仓库，用 **Android Studio** 打开工程。
-2. 在仓库根目录配置 **`local.properties`**（`sdk.dir` 可参考 Android 默认模板）：
+2. 启动后端（签发 LiveKit Token + 房间状态快照）：
+
+   ```bash
+   docker compose up --build      # 起 livekit-server --dev 与 Syncle 后端（:8787）
+   ```
+
+3. 在仓库根目录配置 **`local.properties`**（`sdk.dir` 按本机路径）：
 
    ```properties
    sdk.dir=C\:\\你的路径\\Android\\Sdk
-   livekit.sandbox_id=你的-livekit-sandbox-id
+   # Android 端访问 Syncle 后端的地址。10.0.2.2 是模拟器内访问宿主机回环的特殊地址。
+   syncle.backend_url=http://10.0.2.2:8787
    ```
 
-3. **同步 Gradle**，在真机或模拟器上 **运行** `app`。
-4. 按提示授予 **摄像头** 与 **麦克风** 权限。
-5. 可选：执行 `./gradlew :app:testDebugUnitTest` 运行单元测试。
+4. **同步 Gradle**，在真机或模拟器上 **运行** `app`。
+5. 按提示授予 **摄像头** 与 **麦克风** 权限。
+6. 可选：`./gradlew :app:testDebugUnitTest` 跑 Android 单测；`cd server && npm test` 跑后端单测。
 
-`livekit.sandbox_id` 须与 [LiveKit Cloud](https://cloud.livekit.io/) 中项目一致；修改后请 **Rebuild**，以便 `BuildConfig.LIVEKIT_SANDBOX_ID` 生效。
+后端基于设备持久 UUID 签发绑定到稳定 `userId` 的 LiveKit JWT；同一设备多次启动保持同一身份。接口详情见 [server/README.md](server/README.md)。
 
 ---
 

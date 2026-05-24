@@ -37,4 +37,16 @@ class PositionSyncEngineTest {
         assertNull(engine.decode(byteArrayOf()))
         assertNull(engine.decode(byteArrayOf(99)))
     }
+
+    @Test
+    fun nextSequence_isMonotonicAndResets() {
+        val engine = PositionSyncEngine()
+        val first = engine.nextSequence()
+        val second = engine.nextSequence()
+        val third = engine.nextSequence()
+        assertEquals(first + 1, second)
+        assertEquals(second + 1, third)
+        engine.reset()
+        assertEquals(first, engine.nextSequence())
+    }
 }

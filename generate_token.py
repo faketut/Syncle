@@ -2,10 +2,10 @@ import time
 from livekit import api
 import os
 
-# 这里的 Keys 必须与你 Docker 运行 LiveKit 时使用的 --dev 模式默认值一致
-# 生产环境下这些应该从环境变量读取
-LIVEKIT_API_KEY = "devkey"
-LIVEKIT_API_SECRET = "secret"
+# Defaults match `docker run livekit/livekit-server --dev` and MUST NOT be used
+# in production. Override via LIVEKIT_API_KEY / LIVEKIT_API_SECRET env vars.
+LIVEKIT_API_KEY = os.environ.get("LIVEKIT_API_KEY", "devkey")
+LIVEKIT_API_SECRET = os.environ.get("LIVEKIT_API_SECRET", "secret")
 
 def generate_token(room_name, participant_name):
     """

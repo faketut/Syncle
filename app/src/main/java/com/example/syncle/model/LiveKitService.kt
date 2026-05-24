@@ -15,8 +15,9 @@ import io.livekit.android.room.track.RemoteVideoTrack
 import io.livekit.android.room.track.VideoTrack
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -27,7 +28,10 @@ class LiveKitService(
     private val context: Context
 ) {
     private var room: Room? = null
-    private var serviceScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+
+    // One scope per connection lifecycle. Allocated in connect(), cancelled
+    // and joined in disconnect(). Null means "no active connection".
+    private var serviceScope: CoroutineScope? = null
 
     private val _events = MutableSharedFlow<LiveKitEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<LiveKitEvent> = _events.asSharedFlow()
@@ -51,9 +55,30 @@ class LiveKitService(
                     )
                 )
                 room = currentRoom
-                setupRoomListener(currentRoom)
+                val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
+                serviceScope = scope
+                setupRoomListener(currentRoom, scope)
                 currentRoom.connect(url = trimmedUrl, token = trimmedToken)
                 currentRoom.localParticipant.setMicrophoneEnabled(true)
+                // Replay existing participants so peers who joined before us appear immediately,
+                // even if they aren't currently moving (no position packets) and their attributes
+                // were published before our connect (no "changed" event will fire for them).
+                currentRoom.remoteParticipants.values.forEach { p ->
+                    val identity = p.identity?.value ?: return@forEach
+                    _events.tryEmit(LiveKitEvent.ParticipantConnected(identity, p.name, p.attributes))
+                    // Also replay any already-subscribed video tracks. The LiveKit
+                    // SDK does NOT reliably re-emit TrackSubscribed for tracks that
+                    // were subscribed before our event collector started, so peers
+                    // who turned on their camera before we connected would never
+                    // show video otherwise.
+                    p.trackPublications.values.forEach { pub ->
+                        val track = pub.track
+                        if (track is RemoteVideoTrack) {
+                            SyncleLog.d("Replay subscribed video track id=$identity sid=${pub.sid}")
+                            _events.tryEmit(LiveKitEvent.VideoTrackSubscribed(identity, track))
+                        }
+                    }
+                }
                 LiveKitConnectResult(success = true)
             } catch (e: Exception) {
                 SyncleLog.e("LiveKit connect failed (url=$trimmedUrl)", e)
@@ -65,13 +90,23 @@ class LiveKitService(
         }
     }
 
-    private fun setupRoomListener(currentRoom: Room) {
-        serviceScope.launch {
+    private fun setupRoomListener(currentRoom: Room, scope: CoroutineScope) {
+        scope.launch {
             currentRoom.events.collect { event ->
                 when (event) {
                     is io.livekit.android.events.RoomEvent.DataReceived -> {
                         val identity = event.participant?.identity?.value ?: return@collect
                         _events.tryEmit(LiveKitEvent.DataReceived(identity, event.data))
+                    }
+                    is io.livekit.android.events.RoomEvent.ParticipantConnected -> {
+                        val identity = event.participant.identity?.value ?: return@collect
+                        _events.tryEmit(
+                            LiveKitEvent.ParticipantConnected(
+                                identity,
+                                event.participant.name,
+                                event.participant.attributes
+                            )
+                        )
                     }
                     is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {
                         val identity = event.participant.identity?.value ?: return@collect
@@ -79,10 +114,26 @@ class LiveKitService(
                     }
                     is io.livekit.android.events.RoomEvent.TrackSubscribed -> {
                         val track = event.track
-                        if (track is RemoteVideoTrack) {
-                            val identity = event.participant.identity?.value ?: return@collect
+                        val identity = event.participant.identity?.value
+                        if (track is RemoteVideoTrack && identity != null) {
                             _events.tryEmit(LiveKitEvent.VideoTrackSubscribed(identity, track))
                         }
+                    }
+                    is io.livekit.android.events.RoomEvent.TrackPublished -> {
+                        if (event.participant === currentRoom.localParticipant &&
+                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
+                            _events.tryEmit(LiveKitEvent.LocalVideoTrackChanged)
+                        }
+                    }
+                    is io.livekit.android.events.RoomEvent.TrackUnpublished -> {
+                        if (event.participant === currentRoom.localParticipant &&
+                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
+                            _events.tryEmit(LiveKitEvent.LocalVideoTrackChanged)
+                        }
+                    }
+                    is io.livekit.android.events.RoomEvent.TrackSubscriptionFailed -> {
+                        val identity = event.participant.identity?.value
+                        SyncleLog.w("TrackSubscriptionFailed id=$identity sid=${event.sid} reason=${event.exception.message}")
                     }
                     is io.livekit.android.events.RoomEvent.ActiveSpeakersChanged -> {
                         val speakingIds = event.speakers.mapNotNull { it.identity?.value }.toSet()
@@ -126,7 +177,12 @@ class LiveKitService(
         audioEngine: SpatialAudioEngine
     ) {
         val currentRoom = room ?: return
-        val participantByIdentity = currentRoom.remoteParticipants.values.associateBy { it.identity?.value }
+        // #12: skip the per-call .associateBy { it.identity?.value } allocation
+        // (was O(N) work + a fresh HashMap on every spatial-audio tick). The
+        // SDK already maintains remoteParticipants as a Map keyed by
+        // Participant.Identity, so we do an O(1) lookup directly against it
+        // and let LiveKit own the join/leave bookkeeping.
+        val remoteParticipants = currentRoom.remoteParticipants
 
         remotePeers.forEach { peer ->
             val volume = audioEngine.calculateVolume(
@@ -137,7 +193,7 @@ class LiveKitService(
             )
             if (!audioEngine.shouldApplyVolume(peer.id, volume)) return@forEach
 
-            val participant = participantByIdentity[peer.id] ?: return@forEach
+            val participant = remoteParticipants[Participant.Identity(peer.id)] ?: return@forEach
             applyVolume(participant, volume)
         }
     }
@@ -165,7 +221,8 @@ class LiveKitService(
     }
 
     fun setCameraEnabled(enabled: Boolean) {
-        serviceScope.launch(Dispatchers.IO) {
+        val scope = serviceScope ?: return
+        scope.launch(Dispatchers.IO) {
             try {
                 room?.localParticipant?.setCameraEnabled(enabled)
             } catch (e: Exception) {
@@ -175,7 +232,8 @@ class LiveKitService(
     }
 
     fun setMicrophoneEnabled(enabled: Boolean) {
-        serviceScope.launch(Dispatchers.IO) {
+        val scope = serviceScope ?: return
+        scope.launch(Dispatchers.IO) {
             try {
                 room?.localParticipant?.setMicrophoneEnabled(enabled)
             } catch (e: Exception) {
@@ -184,14 +242,26 @@ class LiveKitService(
         }
     }
 
-    fun disconnect() {
-        try {
-            serviceScope.cancel()
-            room?.disconnect()
-            room = null
-            serviceScope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
-        } catch (e: Exception) {
-            SyncleLog.e("disconnect failed", e)
+    suspend fun disconnect() {
+        val scope = serviceScope
+        val currentRoom = room
+        serviceScope = null
+        room = null
+        // Cancel the event collector first, then await its teardown so a
+        // subsequent connect() can't observe an event from the previous Room.
+        scope?.coroutineContext?.get(Job)?.cancelAndJoin()
+        // Room.disconnect() in livekit-android 2.x asynchronously releases
+        // native PeerConnections; in older versions it returned immediately
+        // and the next LiveKit.create() could race the teardown. We call it
+        // on Dispatchers.IO and treat it as best-effort — if the SDK ever
+        // promotes this to a true suspending API, switching the call site is
+        // a one-liner.
+        if (currentRoom != null) {
+            try {
+                withContext(Dispatchers.IO) { currentRoom.disconnect() }
+            } catch (e: Exception) {
+                SyncleLog.e("room.disconnect failed", e)
+            }
         }
     }
 }

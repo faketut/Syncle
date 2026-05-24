@@ -1,6 +1,18 @@
-package com.example.syncle.model
+package com.example.syncle.ui.state
 
 import com.example.syncle.ui.MeetingParticipant
+
+/**
+ * UI state contracts consumed by composables and produced by the ViewModel.
+ *
+ * #21: moved out of `com.example.syncle.model` so the UI layer owns its own
+ * state types and the domain layer no longer reaches up into `ui.*`.
+ * Re-homed here verbatim (no behavior change).
+ */
+
+enum class ConnectionStatus {
+    CONNECTING, CONNECTED, DISCONNECTED, ERROR
+}
 
 data class LocalAvatarUi(
     val name: String,

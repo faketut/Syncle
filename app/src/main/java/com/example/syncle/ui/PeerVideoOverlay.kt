@@ -29,11 +29,15 @@ fun PeerVideoOverlay(
     modifier: Modifier = Modifier
 ) {
     val proximityThreshold = 300f
-    val localPosition = localAvatar.position
-    val nearbyPeers by remember(remotePeers, localPosition) {
+    // No remember key: read all inputs (localAvatar.position, the peer list,
+    // and each peer.position / peer.videoTrack) inside the lambda so Compose's
+    // snapshot system tracks them. Keying on localAvatar.position re-created
+    // the derivedStateOf on every avatar tick, defeating the API.
+    val nearbyPeers by remember {
         derivedStateOf {
+            val origin = localAvatar.position
             remotePeers.filter { peer ->
-                (localPosition - peer.position).getDistance() < proximityThreshold &&
+                (origin - peer.position).getDistance() < proximityThreshold &&
                     peer.videoTrack != null
             }
         }
@@ -70,7 +74,7 @@ fun VideoBox(room: Room, peer: RemotePeer) {
             )
         }
         Text(
-            text = peer.name,
+            text = peer.displayName,
             color = Color.White,
             fontSize = 10.sp,
             modifier = Modifier.padding(4.dp).background(Color.Black.copy(alpha = 0.5f))
