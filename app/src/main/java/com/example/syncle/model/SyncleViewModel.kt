@@ -49,12 +49,11 @@ class SyncleViewModel : ViewModel() {
     private var eventsJob: Job? = null
     private var derivedUiJob: Job? = null
 
-    private var urlInternal = ""
-    private var tokenInternal = ""
-    private var isAutoFetchingInternal = false
-    private var startupErrorInternal: String? = null
-    private var lastConnectErrorInternal: String? = null
-    private var connectionStatusInternal = ConnectionStatus.DISCONNECTED
+    // #8: connection state lives in _uiState.value.connection (single source of
+    // truth). Mutations go through updateConnection(); reads go through the
+    // accessor properties below or _uiState.value.connection directly. The old
+    // *Internal fields + var setters used to shadow this and forced every site
+    // to remember to call pushUiState() to flush the duplicate.
 
     private var lastSpeakingIds: Set<String> = emptySet()
 
@@ -108,46 +107,25 @@ class SyncleViewModel : ViewModel() {
 
     fun getLocalVideoTrack(): VideoTrack? = liveKitService?.getLocalVideoTrack()
 
-    // Connection screen bindings
-    var url: String
-        get() = urlInternal
-        set(value) {
-            urlInternal = value
-            pushUiState()
-        }
-    var token: String
-        get() = tokenInternal
-        set(value) {
-            tokenInternal = value
-            pushUiState()
-        }
-    var isAutoFetching: Boolean
-        get() = isAutoFetchingInternal
-        private set(value) {
-            isAutoFetchingInternal = value
-            pushUiState()
-        }
-    var startupError: String?
-        get() = startupErrorInternal
-        private set(value) {
-            startupErrorInternal = value
-            pushUiState()
-        }
+    // Connection screen bindings — read-only views over _uiState.connection.
+    val url: String get() = _uiState.value.connection.url
+    val token: String get() = _uiState.value.connection.token
+    val isAutoFetching: Boolean get() = _uiState.value.connection.isAutoFetching
+    val connectionStatus: ConnectionStatus get() = _uiState.value.connection.status
 
-    fun reportStartupError(message: String) {
-        startupError = message
+    fun setUrl(value: String) = updateConnection { it.copy(url = value) }
+    fun setToken(value: String) = updateConnection { it.copy(token = value) }
+    fun reportStartupError(message: String) =
+        updateConnection { it.copy(startupError = message) }
+
+    private inline fun updateConnection(transform: (ConnectionUi) -> ConnectionUi) {
+        _uiState.value = _uiState.value.let { s -> s.copy(connection = transform(s.connection)) }
     }
-    var connectionStatus: ConnectionStatus
-        get() = connectionStatusInternal
-        private set(value) {
-            connectionStatusInternal = value
-            pushUiState()
-        }
 
     fun autoFetchSession(context: Context) {
         if (isAutoFetching) return
         viewModelScope.launch {
-            isAutoFetching = true
+            updateConnection { it.copy(isAutoFetching = true) }
             try {
                 val deviceId = DeviceIdStore(context).getOrCreate()
                 val profile = ProfileStore(context).get()
@@ -161,22 +139,21 @@ class SyncleViewModel : ViewModel() {
                     room = sessionRoom,
                 )
                 if (details != null) {
-                    urlInternal = details.serverUrl
-                    tokenInternal = details.token
                     sessionUserId = details.userId
-                    startupErrorInternal = null
+                    updateConnection {
+                        it.copy(url = details.serverUrl, token = details.token, startupError = null)
+                    }
                     SyncleLog.d("Session fetch success userId=${details.userId}")
                 } else {
-                    startupErrorInternal =
-                        "Backend session fetch failed. Check syncle.backend_url in local.properties and that the server is reachable."
+                    updateConnection { it.copy(startupError =
+                        "Backend session fetch failed. Check syncle.backend_url in local.properties and that the server is reachable.") }
                     SyncleLog.w("Session fetch returned null")
                 }
             } catch (e: Exception) {
                 SyncleLog.e("Session fetch failed", e)
-                startupErrorInternal = "Startup Error: ${e.message}"
+                updateConnection { it.copy(startupError = "Startup Error: ${e.message}") }
             } finally {
-                isAutoFetching = false
-                pushUiState()
+                updateConnection { it.copy(isAutoFetching = false) }
             }
         }
     }
@@ -185,35 +162,33 @@ class SyncleViewModel : ViewModel() {
         if (connectionStatus == ConnectionStatus.CONNECTING || connectionStatus == ConnectionStatus.CONNECTED) return
         val cache = mapCache
         if (cache == null) {
-            lastConnectErrorInternal = "Map not loaded yet. Wait a moment and try again."
-            connectionStatus = ConnectionStatus.ERROR
-            pushUiState()
+            updateConnection { it.copy(
+                status = ConnectionStatus.ERROR,
+                lastConnectError = "Map not loaded yet. Wait a moment and try again."
+            ) }
             return
         }
 
-        connectionStatus = ConnectionStatus.CONNECTING
-        lastConnectErrorInternal = null
+        updateConnection { it.copy(status = ConnectionStatus.CONNECTING, lastConnectError = null) }
 
         val service = LiveKitService(context.applicationContext)
         liveKitService = service
         collectLiveKitEvents(service)
 
         viewModelScope.launch {
-            val result = service.connect(urlInternal, tokenInternal)
+            val state = _uiState.value.connection
+            val result = service.connect(state.url, state.token)
             if (result.success) {
-                connectionStatus = ConnectionStatus.CONNECTED
-                lastConnectErrorInternal = null
+                updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
                 publishLocalProfileAttribute()
                 seedFromSnapshot()
                 startLoops(cache)
                 startStateReporter()
                 SyncleLog.d("LiveKit connected")
             } else {
-                connectionStatus = ConnectionStatus.ERROR
-                lastConnectErrorInternal = result.errorMessage
+                updateConnection { it.copy(status = ConnectionStatus.ERROR, lastConnectError = result.errorMessage) }
                 SyncleLog.w("LiveKit connect failed: ${result.errorMessage}")
             }
-            pushUiState()
         }
     }
 
@@ -480,7 +455,7 @@ class SyncleViewModel : ViewModel() {
     private fun startStateReporter() {
         reporterJob?.cancel()
         val userId = sessionUserId ?: return
-        val token = tokenInternal
+        val token = _uiState.value.connection.token
         if (token.isEmpty()) return
         reporterJob = viewModelScope.launch {
             while (isActive) {
@@ -529,7 +504,7 @@ class SyncleViewModel : ViewModel() {
         // Capture state under viewModelScope confinement so a concurrent
         // connect() can't observe half-cleared state.
         val userId = sessionUserId
-        val token = tokenInternal
+        val token = _uiState.value.connection.token
         val tableId = meeting.activeTableMeetingId
         val pos = avatarState.position
         viewModelScope.launch {
@@ -552,8 +527,7 @@ class SyncleViewModel : ViewModel() {
             meeting.reset()
             lastSpeakingIds = emptySet()
             mapCache?.invalidateProximityCache()
-            connectionStatus = ConnectionStatus.DISCONNECTED
-            pushUiState()
+            updateConnection { it.copy(status = ConnectionStatus.DISCONNECTED) }
         }
     }
 
@@ -612,16 +586,8 @@ class SyncleViewModel : ViewModel() {
                 fresh
             }
         }
-        _uiState.value = SyncleUiState(
+        _uiState.value = _uiState.value.copy(
             mapReady = ready,
-            connection = ConnectionUi(
-                status = connectionStatusInternal,
-                url = urlInternal,
-                token = tokenInternal,
-                isAutoFetching = isAutoFetchingInternal,
-                startupError = startupErrorInternal,
-                lastConnectError = lastConnectErrorInternal
-            ),
             meeting = MeetingUi(
                 activeTableId = meetingId,
                 tableTitle = meetingId?.let { id -> config?.let { meeting.tableDisplayName(id, it) } },

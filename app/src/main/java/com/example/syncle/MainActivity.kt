@@ -161,7 +161,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
             } else {
                 OutlinedTextField(
                     value = connection.url,
-                    onValueChange = { viewModel.url = it },
+                    onValueChange = { viewModel.setUrl(it) },
                     label = { Text("LiveKit Server URL") },
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -170,7 +170,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
 
                 OutlinedTextField(
                     value = connection.token,
-                    onValueChange = { viewModel.token = it },
+                    onValueChange = { viewModel.setToken(it) },
                     label = { Text("Access Token") },
                     modifier = Modifier.fillMaxWidth(),
                     placeholder = { Text("Paste JWT Token here...") }
