@@ -1,7 +1,7 @@
 package com.example.syncle.domain
 
 import androidx.compose.ui.geometry.Offset
-import com.example.syncle.model.MapConfig
+import com.example.syncle.domain.MapConfig
 /**
  * Immutable map data plus cached nearest-table lookups (position epsilon).
  */

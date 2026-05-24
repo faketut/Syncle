@@ -14,10 +14,10 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import com.example.syncle.model.AvatarState
-import com.example.syncle.model.MapConfig
-import com.example.syncle.model.RemotePeer
-import com.example.syncle.model.TablePresence
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.MapConfig
+import com.example.syncle.domain.RemotePeer
+import com.example.syncle.domain.TablePresence
 import kotlin.math.roundToInt
 
 private val LocalAvatarColor = Color(0xFF00E5FF)

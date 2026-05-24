@@ -1,4 +1,4 @@
-package com.example.syncle.model
+package com.example.syncle.domain
 
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf

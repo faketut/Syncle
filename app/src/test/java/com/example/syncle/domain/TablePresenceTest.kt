@@ -1,4 +1,4 @@
-package com.example.syncle.model
+package com.example.syncle.domain
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect

@@ -1,6 +1,9 @@
-package com.example.syncle.model
+package com.example.syncle.data
 
 import androidx.compose.ui.geometry.Rect
+import com.example.syncle.domain.CollisionSettings
+import com.example.syncle.domain.InteractableItem
+import com.example.syncle.domain.MapConfig
 import org.json.JSONObject
 
 class MapRepository {

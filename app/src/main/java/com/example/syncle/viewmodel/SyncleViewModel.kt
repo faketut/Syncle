@@ -1,15 +1,22 @@
-package com.example.syncle.model
+package com.example.syncle.viewmodel
 
 import android.content.Context
 import androidx.compose.ui.geometry.Offset
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.syncle.data.AuthRepository
 import com.example.syncle.data.DeviceIdStore
+import com.example.syncle.data.LiveKitService
 import com.example.syncle.data.Profile
 import com.example.syncle.data.ProfileStore
 import com.example.syncle.data.RoomStateReporter
 import com.example.syncle.data.SnapshotApi
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.MapConfig
 import com.example.syncle.domain.MapConfigCache
+import com.example.syncle.domain.RemotePeer
+import com.example.syncle.domain.TablePresence
+import com.example.syncle.domain.UserStatus
 import com.example.syncle.domain.LiveKitEvent
 import com.example.syncle.domain.PeerRegistry
 import com.example.syncle.domain.PositionSyncEngine

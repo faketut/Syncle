@@ -1,10 +1,10 @@
 package com.example.syncle.domain
 
-import com.example.syncle.model.AvatarState
-import com.example.syncle.model.LiveKitService
-import com.example.syncle.model.MapConfig
-import com.example.syncle.model.RemotePeer
-import com.example.syncle.model.TablePresence
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.data.LiveKitService
+import com.example.syncle.domain.MapConfig
+import com.example.syncle.domain.RemotePeer
+import com.example.syncle.domain.TablePresence
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
