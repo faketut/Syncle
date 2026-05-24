@@ -166,6 +166,29 @@ class SyncleViewModel : ViewModel() {
         collectLiveKitEvents(service)
 
         viewModelScope.launch {
+            // Always re-fetch a fresh token immediately before connecting so an
+            // expired token (TTL=1h) from a previous autoFetchSession never
+            // causes a 401 on the LiveKit websocket handshake.
+            val deviceId = DeviceIdStore(context).getOrCreate()
+            val profile = sessionProfile ?: ProfileStore(context).get()
+            val freshDetails = authRepository.fetchSession(
+                deviceId = deviceId,
+                nickname = profile.nickname,
+                color = profile.color,
+                room = sessionRoom,
+            )
+            if (freshDetails != null) {
+                urlInternal = freshDetails.serverUrl
+                tokenInternal = freshDetails.token
+                sessionUserId = freshDetails.userId
+            } else {
+                connectionStatus = ConnectionStatus.ERROR
+                lastConnectErrorInternal =
+                    "Failed to refresh session token. Check backend connectivity."
+                SyncleLog.w("Token refresh before connect returned null")
+                pushUiState()
+                return@launch
+            }
             val result = service.connect(urlInternal, tokenInternal)
             if (result.success) {
                 connectionStatus = ConnectionStatus.CONNECTED
