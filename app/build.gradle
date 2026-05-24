@@ -31,7 +31,12 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled false
+            // #23: enable R8 code shrinking + resource shrinking. Library
+            // consumer rules from LiveKit/WebRTC/OkHttp/coroutines/Compose
+            // already cover their classes; Syncle-specific keeps live in
+            // proguard-rules.pro.
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }

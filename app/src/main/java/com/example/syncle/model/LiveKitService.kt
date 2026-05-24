@@ -177,7 +177,12 @@ class LiveKitService(
         audioEngine: SpatialAudioEngine
     ) {
         val currentRoom = room ?: return
-        val participantByIdentity = currentRoom.remoteParticipants.values.associateBy { it.identity?.value }
+        // #12: skip the per-call .associateBy { it.identity?.value } allocation
+        // (was O(N) work + a fresh HashMap on every spatial-audio tick). The
+        // SDK already maintains remoteParticipants as a Map keyed by
+        // Participant.Identity, so we do an O(1) lookup directly against it
+        // and let LiveKit own the join/leave bookkeeping.
+        val remoteParticipants = currentRoom.remoteParticipants
 
         remotePeers.forEach { peer ->
             val volume = audioEngine.calculateVolume(
@@ -188,7 +193,7 @@ class LiveKitService(
             )
             if (!audioEngine.shouldApplyVolume(peer.id, volume)) return@forEach
 
-            val participant = participantByIdentity[peer.id] ?: return@forEach
+            val participant = remoteParticipants[Participant.Identity(peer.id)] ?: return@forEach
             applyVolume(participant, volume)
         }
     }
