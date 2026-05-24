@@ -303,6 +303,10 @@ class SyncleViewModel : ViewModel() {
             peer.displayName = name
         }
         onParticipantAttributes(id, attributes)
+        // Snapshot may have new info (tableId, position, color) that the LiveKit
+        // attribute events haven't delivered yet. Pull it now so a late joiner
+        // shows up in the existing user's UI as soon as they post their first state.
+        seedFromSnapshot()
         pushUiState()
         SyncleLog.d("Participant connected id=$id name=$name attrs=${attributes.keys}")
     }
@@ -334,6 +338,7 @@ class SyncleViewModel : ViewModel() {
         // Use getOrCreate so that an attribute event arriving before any position/connect
         // event still materializes the peer.
         val peer = peerRegistry.getOrCreate(id)
+        SyncleLog.d("onParticipantAttributes id=$id attrs=$attributes peer.tableBefore=${peer.tableMeetingId}")
         var changed = false
         val statusStr = attributes["status"]
         if (statusStr != null) {
@@ -402,6 +407,11 @@ class SyncleViewModel : ViewModel() {
                     tableId = meeting.activeTableMeetingId,
                     position = avatarState.position,
                 )
+                // Re-pull the room snapshot from the backend so peers' tableId,
+                // position, nickname and color stay fresh even if LiveKit
+                // attribute / data events are delayed or dropped. Backend is the
+                // source of truth.
+                seedFromSnapshot()
                 delay(REPORTER_INTERVAL_MS)
             }
         }
