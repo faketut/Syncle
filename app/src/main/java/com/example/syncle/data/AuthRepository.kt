@@ -1,4 +1,4 @@
-package com.example.syncle.model
+package com.example.syncle.data
 
 import com.example.syncle.BuildConfig
 import com.example.syncle.domain.SyncleLog

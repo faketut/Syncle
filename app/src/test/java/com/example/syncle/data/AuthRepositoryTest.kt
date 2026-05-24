@@ -1,4 +1,4 @@
-package com.example.syncle.model
+package com.example.syncle.data
 
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest

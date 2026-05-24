@@ -18,9 +18,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlin.OptIn
+import com.example.syncle.data.MapRepository
 import com.example.syncle.domain.SyncleLog
-import com.example.syncle.model.*
 import com.example.syncle.ui.state.*
+import com.example.syncle.viewmodel.SyncleViewModel
 import com.example.syncle.ui.SyncleScreenHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

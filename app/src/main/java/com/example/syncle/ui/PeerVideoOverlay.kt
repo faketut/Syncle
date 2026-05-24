@@ -16,8 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.syncle.model.AvatarState
-import com.example.syncle.model.RemotePeer
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.RemotePeer
 import com.example.syncle.ui.livekit.SyncleVideoRenderer
 import io.livekit.android.room.Room
 

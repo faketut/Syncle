@@ -35,8 +35,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.syncle.model.AvatarState
-import com.example.syncle.model.RemotePeer
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.RemotePeer
 import com.example.syncle.ui.livekit.SyncleVideoRenderer
 import io.livekit.android.room.Room
 import io.livekit.android.room.track.VideoTrack
@@ -259,7 +259,7 @@ fun buildMeetingParticipants(
                 displayName = peer.displayName,
                 isLocal = false,
                 isSpeaking = peer.isSpeaking,
-                isMicMuted = peer.status == com.example.syncle.model.UserStatus.QUIET_MODE,
+                isMicMuted = peer.status == com.example.syncle.domain.UserStatus.QUIET_MODE,
                 hasVideo = peer.videoTrack != null,
                 videoTrack = peer.videoTrack
             )

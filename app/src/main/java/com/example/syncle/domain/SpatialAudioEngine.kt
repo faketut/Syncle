@@ -1,10 +1,10 @@
 package com.example.syncle.domain
 
-import com.example.syncle.model.AvatarState
-import com.example.syncle.model.MapConfig
-import com.example.syncle.model.RemotePeer
-import com.example.syncle.model.TablePresence
-import com.example.syncle.model.UserStatus
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.MapConfig
+import com.example.syncle.domain.RemotePeer
+import com.example.syncle.domain.TablePresence
+import com.example.syncle.domain.UserStatus
 import kotlin.math.abs
 
 class SpatialAudioEngine(

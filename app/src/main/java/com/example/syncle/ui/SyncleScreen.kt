@@ -12,11 +12,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.syncle.model.AvatarState
-import com.example.syncle.model.MapConfig
-import com.example.syncle.model.RemotePeer
+import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.MapConfig
+import com.example.syncle.domain.RemotePeer
 import com.example.syncle.ui.state.SyncleUiState
-import com.example.syncle.model.SyncleViewModel
+import com.example.syncle.viewmodel.SyncleViewModel
 import io.livekit.android.room.Room
 
 @Composable

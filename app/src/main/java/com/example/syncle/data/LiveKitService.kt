@@ -1,7 +1,10 @@
-package com.example.syncle.model
+package com.example.syncle.data
 
 import android.content.Context
+import com.example.syncle.domain.AvatarState
 import com.example.syncle.domain.LiveKitEvent
+import com.example.syncle.domain.MapConfig
+import com.example.syncle.domain.RemotePeer
 import com.example.syncle.domain.SpatialAudioEngine
 import com.example.syncle.domain.SyncleLog
 import io.livekit.android.LiveKit
