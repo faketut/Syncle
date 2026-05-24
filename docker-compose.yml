@@ -1,0 +1,28 @@
+services:
+  livekit:
+    image: livekit/livekit-server:v1.7
+    command: --dev --bind 0.0.0.0
+    ports:
+      - "7880:7880"   # signaling (WebSocket)
+      - "7881:7881"   # TCP fallback
+      - "7882:7882/udp"
+    restart: unless-stopped
+
+  server:
+    build:
+      context: ./server
+    depends_on:
+      - livekit
+    environment:
+      LIVEKIT_URL: ws://livekit:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secret
+      PORT: 8787
+      DB_PATH: /data/syncle.db
+      TOKEN_TTL_SECONDS: "3600"
+      LOG_LEVEL: info
+    volumes:
+      - ./server/data:/data
+    ports:
+      - "8787:8787"
+    restart: unless-stopped
