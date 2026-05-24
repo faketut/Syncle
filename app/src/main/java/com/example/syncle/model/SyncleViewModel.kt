@@ -265,7 +265,7 @@ class SyncleViewModel : ViewModel() {
         val mapConfig = cache.config
         syncJob = viewModelScope.launch {
             while (isActive) {
-                val seq = PositionSyncEngine.sequenceNow()
+                val seq = positionSync.nextSequence()
                 positionSync.encodeIfMoved(avatarState.position, seq)?.let { payload ->
                     liveKitService?.publishPosition(payload)
                 }

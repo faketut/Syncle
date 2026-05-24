@@ -34,17 +34,16 @@ fun SyncleScreen(
 ) {
     val meeting = uiState.meeting
     val activeTableId = meeting.activeTableId
-    val backgroundImage = rememberMapBackgroundImage(mapConfig.backgroundImage)
+    val backgroundImage = rememberMapBackground(mapConfig.backgroundImage)
     val logicWorldSize = remember(mapConfig, backgroundImage) {
-        backgroundImage?.let { Size(it.width.toFloat(), it.height.toFloat()) }
-            ?: mapConfig.mapDrawSize
+        backgroundImage?.logicalSize ?: mapConfig.mapDrawSize
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
         SpatialCanvas(
             mapConfig = mapConfig,
             logicWorldSize = logicWorldSize,
-            backgroundImage = backgroundImage,
+            backgroundImage = backgroundImage?.image,
             avatarState = avatarState,
             remotePeers = remotePeers,
             onMove = onMove,
