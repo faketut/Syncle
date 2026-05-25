@@ -152,6 +152,17 @@ class LiveKitService(
                         val identity = event.participant.identity?.value ?: return@collect
                         _events.tryEmit(LiveKitEvent.ConnectionQualityChanged(identity, event.quality))
                     }
+                    is io.livekit.android.events.RoomEvent.Reconnecting -> {
+                        _events.tryEmit(LiveKitEvent.Reconnecting)
+                    }
+                    is io.livekit.android.events.RoomEvent.Reconnected -> {
+                        _events.tryEmit(LiveKitEvent.Reconnected)
+                    }
+                    is io.livekit.android.events.RoomEvent.Disconnected -> {
+                        val reason = event.reason.name
+                        SyncleLog.w("Room disconnected reason=$reason")
+                        _events.tryEmit(LiveKitEvent.Disconnected(reason))
+                    }
                     else -> {}
                 }
             }

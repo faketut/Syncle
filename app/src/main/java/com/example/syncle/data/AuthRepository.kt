@@ -18,6 +18,8 @@ data class ConnectionDetails(
     val userId: String,
     val nickname: String,
     val color: String,
+    /** Epoch millis when the JWT expires. 0 if the backend didn't return one. */
+    val expiresAt: Long,
 )
 
 /**
@@ -70,6 +72,7 @@ class AuthRepository(
                     userId = json.getString("userId"),
                     nickname = json.optString("nickname", nickname),
                     color = json.optString("color", color),
+                    expiresAt = json.optLong("expiresAt", 0L),
                 )
             }
         } catch (e: Exception) {

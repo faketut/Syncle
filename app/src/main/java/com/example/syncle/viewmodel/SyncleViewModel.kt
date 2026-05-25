@@ -20,6 +20,7 @@ import com.example.syncle.domain.UserStatus
 import com.example.syncle.domain.LiveKitEvent
 import com.example.syncle.domain.PeerRegistry
 import com.example.syncle.domain.PositionSyncEngine
+import com.example.syncle.domain.ReconnectPolicy
 import com.example.syncle.domain.SpatialAudioEngine
 import com.example.syncle.domain.SyncleLog
 import com.example.syncle.domain.TableMeetingController
@@ -94,7 +95,18 @@ class SyncleViewModel : ViewModel() {
     private var sessionUserId: String? = null
     private var sessionProfile: Profile? = null
     private var sessionRoom: String = "syncle-office"
+    private var sessionExpiresAt: Long = 0L
     private var reporterJob: Job? = null
+
+    // #39: auto-reconnect plumbing. appContext is captured on first connect()
+    // so the reconnect loop can run without holding an Activity reference.
+    // userInitiatedDisconnect suppresses the retry loop when the user taps
+    // Leave Room; cleared on the next manual connect().
+    private var appContext: Context? = null
+    private val userInitiatedDisconnect = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var reconnectJob: Job? = null
+    private var reconnectAttempt: Int = 0
+    private var lastConnectedCache: MapConfigCache? = null
 
     init {
         // Reactively rebuild UI whenever the peer registry or the active
@@ -153,10 +165,11 @@ class SyncleViewModel : ViewModel() {
                 )
                 if (details != null) {
                     sessionUserId = details.userId
+                    sessionExpiresAt = details.expiresAt
                     updateConnection {
                         it.copy(url = details.serverUrl, token = details.token, startupError = null)
                     }
-                    SyncleLog.d("Session fetch success userId=${details.userId}")
+                    SyncleLog.d("Session fetch success userId=${details.userId} expiresAt=${details.expiresAt}")
                 } else {
                     updateConnection { it.copy(startupError =
                         "Backend session fetch failed. Check syncle.backend_url in local.properties and that the server is reachable.") }
@@ -172,7 +185,9 @@ class SyncleViewModel : ViewModel() {
     }
 
     fun connect(context: Context) {
-        if (connectionStatus == ConnectionStatus.CONNECTING || connectionStatus == ConnectionStatus.CONNECTED) return
+        if (connectionStatus == ConnectionStatus.CONNECTING ||
+            connectionStatus == ConnectionStatus.CONNECTED ||
+            connectionStatus == ConnectionStatus.RECONNECTING) return
         val cache = mapCache
         if (cache == null) {
             updateConnection { it.copy(
@@ -182,26 +197,117 @@ class SyncleViewModel : ViewModel() {
             return
         }
 
-        updateConnection { it.copy(status = ConnectionStatus.CONNECTING, lastConnectError = null) }
+        appContext = context.applicationContext
+        lastConnectedCache = cache
+        userInitiatedDisconnect.set(false)
+        reconnectJob?.cancel()
+        reconnectAttempt = 0
 
-        val service = LiveKitService(context.applicationContext)
+        updateConnection { it.copy(status = ConnectionStatus.CONNECTING, lastConnectError = null) }
+        viewModelScope.launch {
+            attemptConnect(cache, isInitial = true)
+        }
+    }
+
+    /**
+     * Shared connect path used by both the user-initiated [connect] flow and
+     * the [scheduleReconnect] retry loop. Caller is responsible for the UI
+     * status transition into CONNECTING / RECONNECTING before calling.
+     */
+    private suspend fun attemptConnect(cache: MapConfigCache, isInitial: Boolean) {
+        // Tear down any previous LiveKitService — on reconnect the old Room
+        // is already dead, but disconnect() is idempotent and cheap.
+        val old = liveKitService
+        if (old != null) {
+            liveKitService = null
+            try { old.disconnect() } catch (_: Exception) { /* best-effort */ }
+        }
+        val ctx = appContext ?: return
+        val service = LiveKitService(ctx)
         liveKitService = service
         collectLiveKitEvents(service)
 
-        viewModelScope.launch {
-            val state = _uiState.value.connection
-            val result = service.connect(state.url, state.token)
-            if (result.success) {
-                updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
-                publishLocalProfileAttribute()
-                seedFromSnapshot()
+        val state = _uiState.value.connection
+        val result = service.connect(state.url, state.token)
+        if (result.success) {
+            updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
+            reconnectAttempt = 0
+            publishLocalProfileAttribute()
+            seedFromSnapshot()
+            if (isInitial) {
                 startLoops(cache)
-                startStateReporter()
-                SyncleLog.d("LiveKit connected")
-            } else {
-                updateConnection { it.copy(status = ConnectionStatus.ERROR, lastConnectError = result.errorMessage) }
-                SyncleLog.w("LiveKit connect failed: ${result.errorMessage}")
             }
+            // Always (re)start the state reporter — token / userId may have rotated.
+            startStateReporter()
+            SyncleLog.d("LiveKit ${if (isInitial) "connected" else "reconnected"} (attempt=$reconnectAttempt)")
+        } else {
+            SyncleLog.w("LiveKit connect failed: ${result.errorMessage}")
+            if (isInitial) {
+                updateConnection { it.copy(status = ConnectionStatus.ERROR, lastConnectError = result.errorMessage) }
+            } else {
+                // Retry path: schedule another attempt with back-off.
+                scheduleReconnect(reason = result.errorMessage)
+            }
+        }
+    }
+
+    /**
+     * #39: schedule an exponential-back-off reconnect attempt. Safe to call
+     * multiple times — concurrent calls are coalesced because we cancel any
+     * in-flight reconnectJob first.
+     */
+    private fun scheduleReconnect(reason: String?) {
+        if (userInitiatedDisconnect.get()) return
+        val cache = lastConnectedCache ?: return
+        if (appContext == null) return
+
+        reconnectJob?.cancel()
+        reconnectAttempt += 1
+        val attempt = reconnectAttempt
+        if (ReconnectPolicy.shouldGiveUp(attempt)) {
+            updateConnection { it.copy(
+                status = ConnectionStatus.ERROR,
+                lastConnectError = "Reconnect gave up after ${attempt - 1} attempts. ${reason ?: ""}".trim()
+            ) }
+            SyncleLog.w("Reconnect: giving up after ${attempt - 1} attempts")
+            return
+        }
+        val delayMs = ReconnectPolicy.delayMsForAttempt(attempt)
+        SyncleLog.d("Reconnect: attempt $attempt scheduled in ${delayMs}ms (reason=$reason)")
+        updateConnection { it.copy(
+            status = ConnectionStatus.RECONNECTING,
+            lastConnectError = reason
+        ) }
+        reconnectJob = viewModelScope.launch {
+            delay(delayMs)
+            if (userInitiatedDisconnect.get()) return@launch
+            // Refresh JWT if it's expired or within 60s of expiring.
+            val now = System.currentTimeMillis()
+            if (sessionExpiresAt > 0L && now >= sessionExpiresAt - 60_000L) {
+                val ctx = appContext ?: return@launch
+                SyncleLog.d("Reconnect: token expired/near-expiry, refetching session")
+                refreshSession(ctx)
+            }
+            attemptConnect(cache, isInitial = false)
+        }
+    }
+
+    /** Refresh the JWT in-place, preserving sessionRoom/profile. */
+    private suspend fun refreshSession(context: Context) {
+        try {
+            val deviceId = DeviceIdStore(context).getOrCreate()
+            val profile = sessionProfile ?: ProfileStore(context).get()
+            val details = authRepository.fetchSession(
+                deviceId = deviceId,
+                nickname = profile.nickname,
+                color = profile.color,
+                room = sessionRoom,
+            ) ?: return
+            sessionUserId = details.userId
+            sessionExpiresAt = details.expiresAt
+            updateConnection { it.copy(url = details.serverUrl, token = details.token) }
+        } catch (e: Exception) {
+            SyncleLog.w("refreshSession failed: ${e.message}")
         }
     }
 
@@ -218,6 +324,20 @@ class SyncleViewModel : ViewModel() {
                     is LiveKitEvent.ActiveSpeakersChanged -> onActiveSpeakersChanged(event.speakingIds)
                     is LiveKitEvent.ParticipantAttributesChanged -> onParticipantAttributes(event.participantId, event.attributes)
                     is LiveKitEvent.ConnectionQualityChanged -> onConnectionQualityChanged(event.participantId, event.quality)
+                    is LiveKitEvent.Reconnecting -> {
+                        // SDK-driven transient retry; surface it but don't tear down our state.
+                        updateConnection { it.copy(status = ConnectionStatus.RECONNECTING) }
+                    }
+                    is LiveKitEvent.Reconnected -> {
+                        reconnectAttempt = 0
+                        updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
+                    }
+                    is LiveKitEvent.Disconnected -> {
+                        // SDK gave up. Drive our own back-off unless the user pulled the plug.
+                        if (!userInitiatedDisconnect.get()) {
+                            scheduleReconnect(reason = event.reason)
+                        }
+                    }
                 }
             }
         }
@@ -515,6 +635,10 @@ class SyncleViewModel : ViewModel() {
     }
 
     fun disconnect() {
+        userInitiatedDisconnect.set(true)
+        reconnectJob?.cancel()
+        reconnectJob = null
+        reconnectAttempt = 0
         syncJob?.cancel()
         lerpJob?.cancel()
         eventsJob?.cancel()
