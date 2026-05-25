@@ -11,7 +11,8 @@ const Body = z.object({
     .string()
     .regex(/^#[0-9a-fA-F]{6}$/)
     .default("#4F8EF7"),
-  room: z.string().min(1).max(64),
+  // #40: keep the JWT `video.room` claim sane. Lowercase + digits + dash, 3-64.
+  room: z.string().regex(/^[a-z0-9-]{3,64}$/, "room must match ^[a-z0-9-]{3,64}$"),
 });
 
 export interface SessionsDeps {

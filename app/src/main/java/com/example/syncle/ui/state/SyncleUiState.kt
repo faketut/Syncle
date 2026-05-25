@@ -25,7 +25,11 @@ data class ConnectionUi(
     val token: String,
     val isAutoFetching: Boolean,
     val startupError: String?,
-    val lastConnectError: String? = null
+    val lastConnectError: String? = null,
+    /** Room name the user is joining / has joined. #40. */
+    val room: String = "syncle-office",
+    /** Inline validation error for the room field, if any. */
+    val roomError: String? = null,
 )
 
 data class MeetingUi(

@@ -35,7 +35,7 @@ class AuthRepository(
         deviceId: String,
         nickname: String,
         color: String,
-        room: String = "syncle-office",
+        room: String,
     ): ConnectionDetails? = withContext(Dispatchers.IO) {
         val base = backendUrl.trim().ifEmpty {
             SyncleLog.w("SYNCLE_BACKEND_URL is empty. Set syncle.backend_url in local.properties.")

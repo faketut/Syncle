@@ -163,6 +163,20 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                 Text(if (connection.isAutoFetching) "Fetching Sandbox Token..." else "Connecting to LiveKit...")
             } else {
                 OutlinedTextField(
+                    value = connection.room,
+                    onValueChange = { viewModel.setRoom(it) },
+                    label = { Text("Room") },
+                    isError = connection.roomError != null,
+                    supportingText = {
+                        connection.roomError?.let { Text(it) }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
                     value = connection.url,
                     onValueChange = { viewModel.setUrl(it) },
                     label = { Text("LiveKit Server URL") },

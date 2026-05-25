@@ -94,7 +94,7 @@ class SyncleViewModel : ViewModel() {
     private val stateReporter = RoomStateReporter()
     private var sessionUserId: String? = null
     private var sessionProfile: Profile? = null
-    private var sessionRoom: String = "syncle-office"
+    private var sessionRoom: String = ProfileStore.DEFAULT_ROOM
     private var sessionExpiresAt: Long = 0L
     private var reporterJob: Job? = null
 
@@ -140,6 +140,20 @@ class SyncleViewModel : ViewModel() {
 
     fun setUrl(value: String) = updateConnection { it.copy(url = value) }
     fun setToken(value: String) = updateConnection { it.copy(token = value) }
+
+    /**
+     * #40: update the room name in the UI without persisting. Validation is
+     * deferred until the user taps Join so they can type freely.
+     */
+    fun setRoom(value: String) = updateConnection {
+        val trimmed = value.trim()
+        val err = when {
+            trimmed.isEmpty() -> null // let placeholder handle empty
+            ProfileStore.isValidRoom(trimmed) -> null
+            else -> "Use 3-64 chars: a-z, 0-9, -"
+        }
+        it.copy(room = value, roomError = err)
+    }
     fun reportStartupError(message: String) =
         updateConnection { it.copy(startupError = message) }
 
@@ -153,10 +167,14 @@ class SyncleViewModel : ViewModel() {
             updateConnection { it.copy(isAutoFetching = true) }
             try {
                 val deviceId = DeviceIdStore(context).getOrCreate()
-                val profile = ProfileStore(context).get()
+                val store = ProfileStore(context)
+                val profile = store.get()
+                val room = store.getRoom()
+                sessionRoom = room
                 avatarState.name = profile.nickname
                 sessionProfile = profile
-                SyncleLog.d("Fetching session: deviceId=$deviceId nick=${profile.nickname}")
+                updateConnection { it.copy(room = room, roomError = null) }
+                SyncleLog.d("Fetching session: deviceId=$deviceId nick=${profile.nickname} room=$room")
                 val details = authRepository.fetchSession(
                     deviceId = deviceId,
                     nickname = profile.nickname,
@@ -197,6 +215,19 @@ class SyncleViewModel : ViewModel() {
             return
         }
 
+        // #40: persist room (validated) before connecting. If the user edited
+        // the field but autoFetchSession used the old room, refetch the session.
+        val store = ProfileStore(context)
+        val typedRoom = _uiState.value.connection.room.trim()
+        if (!ProfileStore.isValidRoom(typedRoom)) {
+            updateConnection { it.copy(roomError = "Use 3-64 chars: a-z, 0-9, -") }
+            return
+        }
+        val roomChanged = typedRoom != sessionRoom
+        store.setRoom(typedRoom)
+        sessionRoom = typedRoom
+        updateConnection { it.copy(room = typedRoom, roomError = null) }
+
         appContext = context.applicationContext
         lastConnectedCache = cache
         userInitiatedDisconnect.set(false)
@@ -205,6 +236,10 @@ class SyncleViewModel : ViewModel() {
 
         updateConnection { it.copy(status = ConnectionStatus.CONNECTING, lastConnectError = null) }
         viewModelScope.launch {
+            // #40: room change means the existing JWT is for the wrong room.
+            if (roomChanged) {
+                refreshSession(context.applicationContext)
+            }
             attemptConnect(cache, isInitial = true)
         }
     }
