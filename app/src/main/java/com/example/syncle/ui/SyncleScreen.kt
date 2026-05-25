@@ -81,6 +81,7 @@ fun SyncleScreen(
             onMove = onMove,
             onJoinRoom = onJoinTableMeeting,
             localCharacter = uiState.connection.character,
+            localColor = uiState.connection.color,
             modifier = Modifier.fillMaxSize(),
         )
 

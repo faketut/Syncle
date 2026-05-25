@@ -206,6 +206,17 @@ class ProfileStore(context: Context) {
             return CHARACTERS.firstOrNull { it.id == id } ?: CHARACTERS.first()
         }
 
+        /**
+         * Reverse-lookup: find the character whose accent matches [color] (hex,
+         * case-insensitive). Used as a fallback when a remote peer's character
+         * id hasn't arrived yet but we already have their color from the
+         * snapshot, so we can still draw their pixel sprite.
+         */
+        fun characterByColor(color: String?): Character? {
+            val c = color?.takeIf { it.isNotBlank() } ?: return null
+            return CHARACTERS.firstOrNull { it.color.equals(c, ignoreCase = true) }
+        }
+
         private const val PREFS = "syncle.profile"
         private const val KEY_NICK = "nickname"
         private const val KEY_COLOR = "color"
