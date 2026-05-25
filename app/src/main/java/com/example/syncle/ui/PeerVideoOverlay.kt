@@ -37,7 +37,13 @@ fun PeerVideoOverlay(
         derivedStateOf {
             val origin = localAvatar.position
             remotePeers.filter { peer ->
-                (origin - peer.position).getDistance() < proximityThreshold &&
+                // Table meetings are private: a peer publishing inside a table
+                // must only be visible to other participants at the same table,
+                // never via the proximity walk-by preview. This overlay only
+                // renders when the local user is NOT in a meeting (see
+                // SyncleScreen), so any peer in a table is off-limits here.
+                peer.tableMeetingId.isNullOrBlank() &&
+                    (origin - peer.position).getDistance() < proximityThreshold &&
                     peer.videoTrack != null
             }
         }
