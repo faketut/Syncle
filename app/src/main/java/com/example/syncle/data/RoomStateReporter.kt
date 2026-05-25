@@ -25,15 +25,21 @@ class RoomStateReporter(
     private val backendUrl: String = BuildConfig.SYNCLE_BACKEND_URL,
     private val client: OkHttpClient = defaultClient,
 ) {
+    /**
+     * Posts the local participant's state. Returns the HTTP status code, or
+     * `null` if the request failed before getting a response (network error,
+     * empty backend URL, etc.). Callers can treat `401` specially to trigger a
+     * session-token refresh.
+     */
     suspend fun report(
         room: String,
         userId: String,
         token: String,
         tableId: String?,
         position: Offset,
-    ): Boolean =
+    ): Int? =
         withContext(Dispatchers.IO) {
-            val base = backendUrl.trim().trimEnd('/').ifEmpty { return@withContext false }
+            val base = backendUrl.trim().trimEnd('/').ifEmpty { return@withContext null }
             val body =
                 JSONObject().apply {
                     put("userId", userId)
@@ -52,11 +58,11 @@ class RoomStateReporter(
                     if (!response.isSuccessful) {
                         SyncleLog.w("state report http=${response.code}")
                     }
-                    response.isSuccessful
+                    response.code
                 }
             } catch (e: Exception) {
                 SyncleLog.e("state report failed", e)
-                false
+                null
             }
         }
 
