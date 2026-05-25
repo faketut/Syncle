@@ -27,6 +27,19 @@ jobs:
       - name: Compile + unit tests
         run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest --no-daemon --stacktrace
 
+      - name: Assemble debug APK (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./gradlew :app:assembleDebug --no-daemon --stacktrace
+
+      - name: Upload debug APK (main only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Upload test reports on failure
         if: failure()
         uses: actions/upload-artifact@v4

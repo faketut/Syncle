@@ -10,6 +10,9 @@ const ENV = {
   TOKEN_TTL_SECONDS: "60",
   LOG_LEVEL: "silent",
   PORT: "8787",
+  // Existing tests share an app; keep the limit out of the way.
+  SESSION_RATE_LIMIT_MAX: "10000",
+  SESSION_RATE_LIMIT_WINDOW_MS: "60000",
 } as unknown as NodeJS.ProcessEnv;
 
 let app: FastifyInstance;

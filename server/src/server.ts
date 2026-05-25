@@ -22,7 +22,15 @@ export async function buildApp(overrideEnv?: NodeJS.ProcessEnv) {
   await app.register(cors, { origin: true });
 
   app.get("/healthz", async () => ({ ok: true, ts: Date.now() }));
-  registerSessionRoutes(app, { db, signer, livekitUrl: cfg.LIVEKIT_URL });
+  await registerSessionRoutes(app, {
+    db,
+    signer,
+    livekitUrl: cfg.LIVEKIT_URL,
+    rateLimit: {
+      max: cfg.SESSION_RATE_LIMIT_MAX,
+      timeWindowMs: cfg.SESSION_RATE_LIMIT_WINDOW_MS,
+    },
+  });
   registerSnapshotRoutes(app, db);
   registerStateRoutes(app, { db, apiSecret: cfg.LIVEKIT_API_SECRET });
 
