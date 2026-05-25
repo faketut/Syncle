@@ -30,6 +30,12 @@ data class ConnectionUi(
     val room: String = "syncle-office",
     /** Inline validation error for the room field, if any. */
     val roomError: String? = null,
+    /** Editable nickname shown on the join screen. */
+    val nickname: String = "",
+    /** Inline validation error for the nickname field, if any. */
+    val nicknameError: String? = null,
+    /** Selected accent color as a hex string ("#RRGGBB"). */
+    val color: String = "#4F8EF7",
 )
 
 data class MeetingUi(
