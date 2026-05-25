@@ -94,6 +94,7 @@ class SyncleViewModel : ViewModel() {
     private var sessionProfile: Profile? = null
     private var sessionRoom: String = ProfileStore.DEFAULT_ROOM
     private var sessionExpiresAt: Long = 0L
+    private var lastSessionRefreshAt: Long = 0L
     private var reporterJob: Job? = null
 
     // #39: auto-reconnect plumbing. appContext is captured on first connect()
@@ -407,8 +408,18 @@ class SyncleViewModel : ViewModel() {
             }
     }
 
-    /** Refresh the JWT in-place, preserving sessionRoom/profile. */
+    /**
+     * Refresh the JWT in-place, preserving sessionRoom/profile. Throttled so a
+     * persistently-failing backend (e.g. mis-signed JWTs returning 401 forever)
+     * can't drive a hot loop of fetch attempts every reporter tick.
+     */
     private suspend fun refreshSession(context: Context) {
+        val now = System.currentTimeMillis()
+        if (now - lastSessionRefreshAt < SESSION_REFRESH_MIN_INTERVAL_MS) {
+            SyncleLog.d("refreshSession skipped (throttled)")
+            return
+        }
+        lastSessionRefreshAt = now
         try {
             val deviceId = DeviceIdStore(context).getOrCreate()
             val profile = sessionProfile ?: ProfileStore(context).get()
@@ -964,6 +975,7 @@ class SyncleViewModel : ViewModel() {
         const val ATTR_COLOR = "color"
         const val ATTR_NICKNAME = "nickname"
         const val REPORTER_INTERVAL_MS = 10_000L
+        const val SESSION_REFRESH_MIN_INTERVAL_MS = 30_000L
     }
 }
 
