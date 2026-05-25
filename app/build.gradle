@@ -7,10 +7,6 @@ plugins {
 ktlint {
     android = true
     ignoreFailures = false
-    // Generated sources (BuildConfig, data binding, etc.) live under build/.
-    filter {
-        exclude { element -> element.file.path.contains("${buildDir}/") }
-    }
     reporters {
         reporter "plain"
         reporter "checkstyle"
