@@ -677,6 +677,12 @@ class SyncleViewModel : ViewModel() {
                 changed = true
             }
         }
+        attributes[ATTR_NICKNAME]?.takeIf { it.isNotBlank() }?.let { newNick ->
+            if (peer.displayName != newNick) {
+                peer.displayName = newNick
+                changed = true
+            }
+        }
         if (changed) {
             peerRegistry.markChanged()
             pushUiState()
@@ -685,7 +691,50 @@ class SyncleViewModel : ViewModel() {
 
     private fun publishLocalProfileAttribute() {
         val profile = sessionProfile ?: return
-        liveKitService?.setLocalAttributes(mapOf(ATTR_COLOR to profile.color))
+        liveKitService?.setLocalAttributes(
+            mapOf(
+                ATTR_COLOR to profile.color,
+                ATTR_NICKNAME to profile.nickname,
+            ),
+        )
+    }
+
+    /**
+     * #50: persist a profile edit made while connected. Updates ProfileStore,
+     * the local avatar, the connection UI, and republishes identity attributes
+     * so remote peers see the new nickname / color without a reconnect.
+     * Returns true on success; false when the input failed validation (the
+     * caller can rely on UI state already carrying the inline error).
+     */
+    fun applyProfileEdit(
+        context: Context,
+        nickname: String,
+        color: String,
+    ): Boolean {
+        val trimmedNick = nickname.trim()
+        if (!ProfileStore.isValidNickname(trimmedNick)) {
+            updateConnection {
+                it.copy(
+                    nickname = nickname,
+                    nicknameError = "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})",
+                )
+            }
+            return false
+        }
+        val updated = Profile(nickname = trimmedNick, color = color)
+        ProfileStore(context).update(updated)
+        sessionProfile = updated
+        avatarState.name = trimmedNick
+        updateConnection {
+            it.copy(
+                nickname = trimmedNick,
+                nicknameError = null,
+                color = color,
+            )
+        }
+        publishLocalProfileAttribute()
+        pushUiState()
+        return true
     }
 
     private fun seedFromSnapshot() {
@@ -898,6 +947,7 @@ class SyncleViewModel : ViewModel() {
 
     private companion object {
         const val ATTR_COLOR = "color"
+        const val ATTR_NICKNAME = "nickname"
         const val REPORTER_INTERVAL_MS = 10_000L
     }
 }
