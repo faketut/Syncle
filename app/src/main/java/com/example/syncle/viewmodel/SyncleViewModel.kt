@@ -782,18 +782,33 @@ class SyncleViewModel : ViewModel() {
     private fun startStateReporter() {
         reporterJob?.cancel()
         val userId = sessionUserId ?: return
-        val token = _uiState.value.connection.token
-        if (token.isEmpty()) return
+        if (_uiState.value.connection.token.isEmpty()) return
         reporterJob =
             viewModelScope.launch {
                 while (isActive) {
-                    stateReporter.report(
-                        room = sessionRoom,
-                        userId = userId,
-                        token = token,
-                        tableId = meeting.activeTableMeetingId,
-                        position = avatarState.position,
-                    )
+                    // Re-read token each tick: refreshSession() may have rotated it.
+                    val token = _uiState.value.connection.token
+                    if (token.isEmpty()) {
+                        delay(REPORTER_INTERVAL_MS)
+                        continue
+                    }
+                    val code =
+                        stateReporter.report(
+                            room = sessionRoom,
+                            userId = userId,
+                            token = token,
+                            tableId = meeting.activeTableMeetingId,
+                            position = avatarState.position,
+                        )
+                    if (code == 401) {
+                        // JWT rejected by backend (typically expired). Refresh in-place
+                        // and let the next tick retry with the new token.
+                        val ctx = appContext
+                        if (ctx != null) {
+                            SyncleLog.d("State report 401, refreshing session token")
+                            refreshSession(ctx)
+                        }
+                    }
                     // Re-pull the room snapshot from the backend so peers' tableId,
                     // position, nickname and color stay fresh even if LiveKit
                     // attribute / data events are delayed or dropped. Backend is the

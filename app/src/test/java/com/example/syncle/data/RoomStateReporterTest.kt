@@ -9,7 +9,7 @@ import okhttp3.mockwebserver.MockWebServer
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -32,7 +32,7 @@ class RoomStateReporterTest {
             server.enqueue(MockResponse().setBody("""{"ok":true}"""))
             val reporter = RoomStateReporter(server.url("/").toString().trimEnd('/'), OkHttpClient())
 
-            val ok =
+            val code =
                 reporter.report(
                     room = "r1",
                     userId = "u-9",
@@ -41,7 +41,7 @@ class RoomStateReporterTest {
                     position = Offset(123.5f, 456.25f),
                 )
 
-            assertTrue(ok)
+            assertEquals(200, code)
             val req = server.takeRequest()
             assertEquals("POST", req.method)
             assertEquals("/v1/rooms/r1/state", req.path)
@@ -64,10 +64,17 @@ class RoomStateReporterTest {
         }
 
     @Test
-    fun `returns false on http error`() =
+    fun `returns 401 on auth error so caller can refresh`() =
         runTest {
             server.enqueue(MockResponse().setResponseCode(401))
             val reporter = RoomStateReporter(server.url("/").toString(), OkHttpClient())
-            assertFalse(reporter.report("r1", "u", "tok", null, Offset.Zero))
+            assertEquals(401, reporter.report("r1", "u", "tok", null, Offset.Zero))
+        }
+
+    @Test
+    fun `returns null when backend url is empty`() =
+        runTest {
+            val reporter = RoomStateReporter("", OkHttpClient())
+            assertNull(reporter.report("r1", "u", "tok", null, Offset.Zero))
         }
 }
