@@ -158,8 +158,16 @@ class SyncleViewModel : ViewModel() {
             it.copy(nickname = value, nicknameError = err)
         }
 
-    /** #46: pick an accent color from [ProfileStore.PALETTE]. */
-    fun setColor(value: String) = updateConnection { it.copy(color = value) }
+    /**
+     * Pick a pixel-art character. The character bundles its own primary
+     * color (see [ProfileStore.CHARACTERS]); selecting it updates both the
+     * character id and the accent color in one go.
+     */
+    fun setCharacter(id: String) =
+        updateConnection {
+            val ch = ProfileStore.characterById(id)
+            it.copy(character = ch.id, color = ch.color)
+        }
 
     /**
      * #40: update the room name in the UI without persisting. Validation is
@@ -202,6 +210,7 @@ class SyncleViewModel : ViewModel() {
                         nickname = profile.nickname,
                         nicknameError = null,
                         color = profile.color,
+                        character = profile.character,
                     )
                 }
                 SyncleLog.d("Fetching session: deviceId=$deviceId nick=${profile.nickname} room=$room")
@@ -271,7 +280,8 @@ class SyncleViewModel : ViewModel() {
         // #46: persist nickname/color edits and refetch the JWT if they changed
         // (the session token carries nickname/color in its identity attributes).
         val typedNick = _uiState.value.connection.nickname.trim()
-        val typedColor = _uiState.value.connection.color
+        val typedCharacter = _uiState.value.connection.character
+        val typedColor = ProfileStore.characterById(typedCharacter).color
         if (!ProfileStore.isValidNickname(typedNick)) {
             updateConnection { it.copy(nicknameError = "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})") }
             return
@@ -280,13 +290,14 @@ class SyncleViewModel : ViewModel() {
         val profileChanged =
             priorProfile == null ||
                 priorProfile.nickname != typedNick ||
+                priorProfile.character != typedCharacter ||
                 priorProfile.color != typedColor
         if (profileChanged) {
-            val updated = Profile(nickname = typedNick, color = typedColor)
+            val updated = Profile(nickname = typedNick, color = typedColor, character = typedCharacter)
             store.update(updated)
             sessionProfile = updated
             avatarState.name = typedNick
-            updateConnection { it.copy(nickname = typedNick, nicknameError = null) }
+            updateConnection { it.copy(nickname = typedNick, nicknameError = null, color = typedColor) }
         }
 
         appContext = context.applicationContext
@@ -485,6 +496,11 @@ class SyncleViewModel : ViewModel() {
         if (meeting.join(tableId)) {
             mapCache?.invalidateProximityCache()
             spatialDirty.set(true)
+            // Defensive: re-pull the room snapshot so peers already seated at
+            // this table have their tableId reconciled even if a LiveKit
+            // attribute event was missed (fixes the symmetric-visibility bug
+            // where two users at the same table couldn't see each other).
+            seedFromSnapshot()
             pushUiState()
         }
     }
@@ -694,6 +710,12 @@ class SyncleViewModel : ViewModel() {
                 changed = true
             }
         }
+        attributes[ATTR_CHARACTER]?.takeIf { it.isNotBlank() }?.let { newChar ->
+            if (peer.character != newChar) {
+                peer.character = newChar
+                changed = true
+            }
+        }
         if (changed) {
             peerRegistry.markChanged()
             pushUiState()
@@ -706,6 +728,7 @@ class SyncleViewModel : ViewModel() {
             mapOf(
                 ATTR_COLOR to profile.color,
                 ATTR_NICKNAME to profile.nickname,
+                ATTR_CHARACTER to profile.character,
             ),
         )
     }
@@ -720,7 +743,7 @@ class SyncleViewModel : ViewModel() {
     fun applyProfileEdit(
         context: Context,
         nickname: String,
-        color: String,
+        character: String,
     ): Boolean {
         val trimmedNick = nickname.trim()
         if (!ProfileStore.isValidNickname(trimmedNick)) {
@@ -732,7 +755,8 @@ class SyncleViewModel : ViewModel() {
             }
             return false
         }
-        val updated = Profile(nickname = trimmedNick, color = color)
+        val ch = ProfileStore.characterById(character)
+        val updated = Profile(nickname = trimmedNick, color = ch.color, character = ch.id)
         ProfileStore(context).update(updated)
         sessionProfile = updated
         avatarState.name = trimmedNick
@@ -740,7 +764,8 @@ class SyncleViewModel : ViewModel() {
             it.copy(
                 nickname = trimmedNick,
                 nicknameError = null,
-                color = color,
+                color = ch.color,
+                character = ch.id,
             )
         }
         publishLocalProfileAttribute()
@@ -946,6 +971,8 @@ class SyncleViewModel : ViewModel() {
                             localCameraEnabled = meeting.meetingCameraEnabled,
                             localVideoTrack = localVideo,
                             tablePeers = meeting.peersAtTable(meetingId, cache.config, peerRegistry.snapshot()),
+                            localColor = sessionProfile?.color ?: _uiState.value.connection.color,
+                            localCharacter = sessionProfile?.character ?: _uiState.value.connection.character,
                         )
                     participantsCacheKey = key
                     participantsCache = fresh
@@ -974,6 +1001,7 @@ class SyncleViewModel : ViewModel() {
     private companion object {
         const val ATTR_COLOR = "color"
         const val ATTR_NICKNAME = "nickname"
+        const val ATTR_CHARACTER = "character"
         const val REPORTER_INTERVAL_MS = 10_000L
         const val SESSION_REFRESH_MIN_INTERVAL_MS = 30_000L
     }

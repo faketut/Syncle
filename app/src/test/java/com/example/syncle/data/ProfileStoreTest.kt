@@ -48,15 +48,15 @@ class ProfileStoreTest {
     }
 
     @Test
-    fun palette_isNonEmptyAndHexFormatted() {
-        val palette = ProfileStore.PALETTE
-        assertTrue("palette must not be empty", palette.isNotEmpty())
+    fun characters_areNonEmptyHexAndUniqueIds() {
+        val chars = ProfileStore.CHARACTERS
+        assertTrue("character catalog must not be empty", chars.isNotEmpty())
         val hex = Regex("^#[0-9A-Fa-f]{6}$")
-        palette.forEach { color ->
-            assertTrue("palette entry $color must be #RRGGBB", hex.matches(color))
+        chars.forEach { ch ->
+            assertTrue("character color ${ch.color} must be #RRGGBB", hex.matches(ch.color))
+            assertTrue("character ${ch.id} sprite must be square", ch.sprite.rows.all { it.length == ch.sprite.sideCells })
         }
-        // No duplicates — the picker UI relies on this for stable selection.
-        assertEquals(palette.size, palette.distinct().size)
+        assertEquals(chars.size, chars.distinctBy { it.id }.size)
     }
 
     @Test

@@ -20,7 +20,7 @@ import com.example.syncle.domain.TablePresence
 import kotlin.math.roundToInt
 
 private val LocalAvatarColor = Color(0xFF00E5FF)
-private val RemoteAvatarColor = Color(0xFF9E9E9E)
+private val RemoteAvatarFallback = Color(0xFF9E9E9E)
 private val SpeakingHalo = Color(0xFF4CAF50).copy(alpha = 0.45f)
 
 @Composable
@@ -111,10 +111,16 @@ fun SpatialCanvas(
 
         remotePeers.forEach { peer ->
             val peerScreen = MapCamera.worldToScreen(peer.position.x, peer.position.y, viewport, screenSize)
+            val peerColor =
+                try {
+                    Color(android.graphics.Color.parseColor(peer.color))
+                } catch (_: IllegalArgumentException) {
+                    RemoteAvatarFallback
+                }
             drawAvatarDot(
                 center = peerScreen,
                 radiusPx = avatarState.radius * viewport.scale,
-                fillColor = RemoteAvatarColor,
+                fillColor = peerColor,
                 showSpeakingHalo = peer.isSpeaking,
             )
         }

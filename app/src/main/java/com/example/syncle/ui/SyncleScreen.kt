@@ -13,7 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Button
@@ -141,7 +141,7 @@ fun SyncleScreen(
     if (settingsOpen) {
         ProfileSettingsSheet(
             initialNickname = uiState.connection.nickname,
-            initialColor = uiState.connection.color,
+            initialCharacter = uiState.connection.character,
             nicknameError = uiState.connection.nicknameError,
             onApply = onApplyProfileEdit,
             onDismiss = { settingsOpen = false },
@@ -153,7 +153,7 @@ fun SyncleScreen(
 @Composable
 private fun ProfileSettingsSheet(
     initialNickname: String,
-    initialColor: String,
+    initialCharacter: String,
     nicknameError: String?,
     onApply: (String, String) -> Boolean,
     onDismiss: () -> Unit,
@@ -161,7 +161,7 @@ private fun ProfileSettingsSheet(
     val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
     var nickname by remember { mutableStateOf(initialNickname) }
-    var color by remember { mutableStateOf(initialColor) }
+    var character by remember { mutableStateOf(initialCharacter) }
     var localError by remember { mutableStateOf(nicknameError) }
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
@@ -191,13 +191,13 @@ private fun ProfileSettingsSheet(
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(12.dp))
-            Text("Accent color", style = MaterialTheme.typography.labelMedium)
+            Text("Character", style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(4.dp))
-            SettingsColorRow(selected = color, onSelect = { color = it })
+            SettingsCharacterRow(selectedId = character, onSelect = { character = it })
             Spacer(Modifier.height(16.dp))
             Button(
                 onClick = {
-                    if (onApply(nickname, color)) {
+                    if (onApply(nickname, character)) {
                         scope.launch {
                             sheetState.hide()
                             onDismiss()
@@ -217,27 +217,27 @@ private fun ProfileSettingsSheet(
 }
 
 @Composable
-private fun SettingsColorRow(
-    selected: String,
+private fun SettingsCharacterRow(
+    selectedId: String,
     onSelect: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ProfileStore.PALETTE.forEach { hex ->
+        ProfileStore.CHARACTERS.forEach { ch ->
             val swatch =
                 try {
-                    Color(android.graphics.Color.parseColor(hex))
+                    Color(android.graphics.Color.parseColor(ch.color))
                 } catch (_: IllegalArgumentException) {
                     MaterialTheme.colorScheme.primary
                 }
-            val isSelected = hex.equals(selected, ignoreCase = true)
+            val isSelected = ch.id == selectedId
             Box(
                 modifier =
                     Modifier
-                        .size(32.dp)
-                        .background(swatch, shape = CircleShape)
+                        .size(48.dp)
+                        .background(swatch.copy(alpha = 0.18f), shape = RoundedCornerShape(8.dp))
                         .border(
                             width = if (isSelected) 3.dp else 1.dp,
                             color =
@@ -246,10 +246,17 @@ private fun SettingsColorRow(
                                 } else {
                                     MaterialTheme.colorScheme.outline
                                 },
-                            shape = CircleShape,
+                            shape = RoundedCornerShape(8.dp),
                         )
-                        .clickable { onSelect(hex) },
-            )
+                        .clickable { onSelect(ch.id) },
+                contentAlignment = Alignment.Center,
+            ) {
+                com.example.syncle.ui.PixelSpriteView(
+                    sprite = ch.sprite,
+                    primary = swatch,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
         }
     }
 }
