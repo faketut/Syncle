@@ -6,6 +6,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,6 +22,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import kotlin.OptIn
 import com.example.syncle.data.MapRepository
+import com.example.syncle.data.ProfileStore
 import com.example.syncle.domain.SyncleLog
 import com.example.syncle.ui.state.*
 import com.example.syncle.viewmodel.SyncleViewModel
@@ -163,6 +167,29 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                 Text(if (connection.isAutoFetching) "Fetching Sandbox Token..." else "Connecting to LiveKit...")
             } else {
                 OutlinedTextField(
+                    value = connection.nickname,
+                    onValueChange = { viewModel.setNickname(it) },
+                    label = { Text("Nickname") },
+                    isError = connection.nicknameError != null,
+                    supportingText = {
+                        connection.nicknameError?.let { Text(it) }
+                    },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text("Accent color", style = MaterialTheme.typography.labelMedium)
+                Spacer(modifier = Modifier.height(4.dp))
+                ColorPaletteRow(
+                    selected = connection.color,
+                    onSelect = { viewModel.setColor(it) }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                OutlinedTextField(
                     value = connection.room,
                     onValueChange = { viewModel.setRoom(it) },
                     label = { Text("Room") },
@@ -209,7 +236,9 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                         if (connection.token.isNotEmpty()) viewModel.connect(context)
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
-                    enabled = connection.token.isNotEmpty()
+                    enabled = connection.token.isNotEmpty() &&
+                        ProfileStore.isValidNickname(connection.nickname) &&
+                        ProfileStore.isValidRoom(connection.room.trim())
                 ) {
                     Text("Join Room")
                 }
@@ -217,5 +246,38 @@ fun SyncleApp(viewModel: SyncleViewModel) {
         }
     } else {
         SyncleScreenHost(mapConfig = mapConfig, viewModel = viewModel)
+    }
+}
+
+/**
+ * #46: tappable color swatches drawn from [ProfileStore.PALETTE]. Selected
+ * swatch is outlined; tap publishes the choice into UI state.
+ */
+@Composable
+private fun ColorPaletteRow(selected: String, onSelect: (String) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        ProfileStore.PALETTE.forEach { hex ->
+            val color = try {
+                androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex))
+            } catch (_: IllegalArgumentException) {
+                MaterialTheme.colorScheme.primary
+            }
+            val isSelected = hex.equals(selected, ignoreCase = true)
+            androidx.compose.foundation.layout.Box(
+                modifier = Modifier
+                    .size(32.dp)
+                    .background(color, shape = androidx.compose.foundation.shape.CircleShape)
+                    .border(
+                        width = if (isSelected) 3.dp else 1.dp,
+                        color = if (isSelected) MaterialTheme.colorScheme.onSurface
+                                else MaterialTheme.colorScheme.outline,
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    )
+                    .clickable { onSelect(hex) }
+            )
+        }
     }
 }

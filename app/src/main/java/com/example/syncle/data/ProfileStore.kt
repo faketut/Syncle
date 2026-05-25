@@ -56,14 +56,24 @@ class ProfileStore(context: Context) {
         val ROOM_REGEX = Regex("^[a-z0-9-]{3,64}$")
         fun isValidRoom(room: String): Boolean = ROOM_REGEX.matches(room)
 
+        /** Visible nickname must be 1..32 chars after trimming. */
+        const val NICKNAME_MAX_LEN = 32
+        fun isValidNickname(nick: String): Boolean {
+            val t = nick.trim()
+            return t.isNotEmpty() && t.length <= NICKNAME_MAX_LEN
+        }
+
+        /** Accent color palette exposed for the profile editor UI. */
+        val PALETTE: List<String> = listOf(
+            "#4F8EF7", "#F78E4F", "#7EC845", "#C8456F",
+            "#9B59B6", "#1ABC9C", "#E67E22", "#34495E"
+        )
+
         private const val PREFS = "syncle.profile"
         private const val KEY_NICK = "nickname"
         private const val KEY_COLOR = "color"
         private const val KEY_ROOM = "room"
         private const val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        private val COLORS = listOf(
-            "#4F8EF7", "#F78E4F", "#7EC845", "#C8456F",
-            "#9B59B6", "#1ABC9C", "#E67E22", "#34495E"
-        )
+        private val COLORS = PALETTE
     }
 }

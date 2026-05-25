@@ -142,6 +142,23 @@ class SyncleViewModel : ViewModel() {
     fun setToken(value: String) = updateConnection { it.copy(token = value) }
 
     /**
+     * #46: update the nickname in the UI without persisting. Persisted on Join.
+     */
+    fun setNickname(value: String) = updateConnection {
+        val trimmed = value.trim()
+        val err = when {
+            trimmed.isEmpty() -> "Nickname required"
+            trimmed.length > ProfileStore.NICKNAME_MAX_LEN ->
+                "Max ${ProfileStore.NICKNAME_MAX_LEN} chars"
+            else -> null
+        }
+        it.copy(nickname = value, nicknameError = err)
+    }
+
+    /** #46: pick an accent color from [ProfileStore.PALETTE]. */
+    fun setColor(value: String) = updateConnection { it.copy(color = value) }
+
+    /**
      * #40: update the room name in the UI without persisting. Validation is
      * deferred until the user taps Join so they can type freely.
      */
@@ -173,7 +190,13 @@ class SyncleViewModel : ViewModel() {
                 sessionRoom = room
                 avatarState.name = profile.nickname
                 sessionProfile = profile
-                updateConnection { it.copy(room = room, roomError = null) }
+                updateConnection { it.copy(
+                    room = room,
+                    roomError = null,
+                    nickname = profile.nickname,
+                    nicknameError = null,
+                    color = profile.color,
+                ) }
                 SyncleLog.d("Fetching session: deviceId=$deviceId nick=${profile.nickname} room=$room")
                 val details = authRepository.fetchSession(
                     deviceId = deviceId,
@@ -228,6 +251,26 @@ class SyncleViewModel : ViewModel() {
         sessionRoom = typedRoom
         updateConnection { it.copy(room = typedRoom, roomError = null) }
 
+        // #46: persist nickname/color edits and refetch the JWT if they changed
+        // (the session token carries nickname/color in its identity attributes).
+        val typedNick = _uiState.value.connection.nickname.trim()
+        val typedColor = _uiState.value.connection.color
+        if (!ProfileStore.isValidNickname(typedNick)) {
+            updateConnection { it.copy(nicknameError = "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})") }
+            return
+        }
+        val priorProfile = sessionProfile
+        val profileChanged = priorProfile == null ||
+            priorProfile.nickname != typedNick ||
+            priorProfile.color != typedColor
+        if (profileChanged) {
+            val updated = Profile(nickname = typedNick, color = typedColor)
+            store.update(updated)
+            sessionProfile = updated
+            avatarState.name = typedNick
+            updateConnection { it.copy(nickname = typedNick, nicknameError = null) }
+        }
+
         appContext = context.applicationContext
         lastConnectedCache = cache
         userInitiatedDisconnect.set(false)
@@ -236,8 +279,9 @@ class SyncleViewModel : ViewModel() {
 
         updateConnection { it.copy(status = ConnectionStatus.CONNECTING, lastConnectError = null) }
         viewModelScope.launch {
-            // #40: room change means the existing JWT is for the wrong room.
-            if (roomChanged) {
+            // #40/#46: room or profile change means the existing JWT is for the
+            // wrong identity. Refetch before attempting the LiveKit connect.
+            if (roomChanged || profileChanged) {
                 refreshSession(context.applicationContext)
             }
             attemptConnect(cache, isInitial = true)
