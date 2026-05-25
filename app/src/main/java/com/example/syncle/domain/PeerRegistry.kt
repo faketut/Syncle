@@ -3,7 +3,6 @@ package com.example.syncle.domain
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.geometry.Offset
-import com.example.syncle.domain.RemotePeer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +21,10 @@ class PeerRegistry {
 
     fun get(id: String): RemotePeer? = peersById[id]
 
-    fun getOrCreate(id: String, initialPosition: Offset = Offset.Zero): RemotePeer {
+    fun getOrCreate(
+        id: String,
+        initialPosition: Offset = Offset.Zero,
+    ): RemotePeer {
         val existing = peersById[id]
         if (existing != null) return existing
         val created = RemotePeer(id = id, name = "Peer $id", initialPosition = initialPosition)

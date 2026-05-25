@@ -28,49 +28,54 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun `fetchSession posts expected body and parses success`() = runTest {
-        server.enqueue(
-            MockResponse()
-                .setHeader("Content-Type", "application/json")
-                .setBody(
-                    """{"userId":"u-1","nickname":"Alice","color":"#fff","serverUrl":"ws://lk","token":"jwt.token.here","expiresAt":1}"""
+    fun `fetchSession posts expected body and parses success`() =
+        runTest {
+            server.enqueue(
+                MockResponse()
+                    .setHeader("Content-Type", "application/json")
+                    .setBody(
+                        """{"userId":"u-1","nickname":"Alice","color":"#fff",""" +
+                            """"serverUrl":"ws://lk","token":"jwt.token.here","expiresAt":1}""",
+                    ),
+            )
+            val repo =
+                AuthRepository(
+                    backendUrl = server.url("/").toString().trimEnd('/'),
+                    client = OkHttpClient(),
                 )
-        )
-        val repo = AuthRepository(
-            backendUrl = server.url("/").toString().trimEnd('/'),
-            client = OkHttpClient(),
-        )
 
-        val details = repo.fetchSession("dev-1", "Alice", "#fff", "room-x")
+            val details = repo.fetchSession("dev-1", "Alice", "#fff", "room-x")
 
-        assertEquals("u-1", details!!.userId)
-        assertEquals("ws://lk", details.serverUrl)
-        assertEquals("jwt.token.here", details.token)
-        assertEquals("Alice", details.nickname)
-        assertEquals("#fff", details.color)
+            assertEquals("u-1", details!!.userId)
+            assertEquals("ws://lk", details.serverUrl)
+            assertEquals("jwt.token.here", details.token)
+            assertEquals("Alice", details.nickname)
+            assertEquals("#fff", details.color)
 
-        val req = server.takeRequest()
-        assertEquals("POST", req.method)
-        assertEquals("/v1/sessions", req.path)
-        val body = JSONObject(req.body.readUtf8())
-        assertEquals("dev-1", body.getString("deviceId"))
-        assertEquals("Alice", body.getString("nickname"))
-        assertEquals("#fff", body.getString("color"))
-        assertEquals("room-x", body.getString("room"))
-    }
+            val req = server.takeRequest()
+            assertEquals("POST", req.method)
+            assertEquals("/v1/sessions", req.path)
+            val body = JSONObject(req.body.readUtf8())
+            assertEquals("dev-1", body.getString("deviceId"))
+            assertEquals("Alice", body.getString("nickname"))
+            assertEquals("#fff", body.getString("color"))
+            assertEquals("room-x", body.getString("room"))
+        }
 
     @Test
-    fun `fetchSession returns null on http error`() = runTest {
-        server.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
-        val repo = AuthRepository(server.url("/").toString(), OkHttpClient())
-        val details = repo.fetchSession("dev-2", "Bob", "#000", room = "room-x")
-        assertNull(details)
-    }
+    fun `fetchSession returns null on http error`() =
+        runTest {
+            server.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
+            val repo = AuthRepository(server.url("/").toString(), OkHttpClient())
+            val details = repo.fetchSession("dev-2", "Bob", "#000", room = "room-x")
+            assertNull(details)
+        }
 
     @Test
-    fun `fetchSession returns null on empty backend url`() = runTest {
-        val repo = AuthRepository(backendUrl = "", client = OkHttpClient())
-        val details = repo.fetchSession("dev-3", "Carol", "#111", room = "room-x")
-        assertNull(details)
-    }
+    fun `fetchSession returns null on empty backend url`() =
+        runTest {
+            val repo = AuthRepository(backendUrl = "", client = OkHttpClient())
+            val details = repo.fetchSession("dev-3", "Carol", "#111", room = "room-x")
+            assertNull(details)
+        }
 }

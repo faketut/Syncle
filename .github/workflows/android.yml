@@ -24,6 +24,9 @@ jobs:
       - name: Cache Gradle
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Ktlint
+        run: ./gradlew :app:ktlintCheck --no-daemon --stacktrace
+
       - name: Compile + unit tests
         run: ./gradlew :app:compileDebugKotlin :app:testDebugUnitTest --no-daemon --stacktrace
 

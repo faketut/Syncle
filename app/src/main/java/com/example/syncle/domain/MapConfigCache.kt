@@ -1,18 +1,21 @@
 package com.example.syncle.domain
 
 import androidx.compose.ui.geometry.Offset
-import com.example.syncle.domain.MapConfig
+
 /**
  * Immutable map data plus cached nearest-table lookups (position epsilon).
  */
 class MapConfigCache(
     val config: MapConfig,
-    private val positionEpsilon: Float = 2f
+    private val positionEpsilon: Float = 2f,
 ) {
     private var lastQueryPosition: Offset? = null
     private var lastNearestTableId: String? = null
 
-    fun nearestTableId(position: Offset, forceRefresh: Boolean = false): String? {
+    fun nearestTableId(
+        position: Offset,
+        forceRefresh: Boolean = false,
+    ): String? {
         if (!forceRefresh) {
             val cachedPos = lastQueryPosition
             if (cachedPos != null && (position - cachedPos).getDistance() < positionEpsilon) {
@@ -28,7 +31,10 @@ class MapConfigCache(
     /**
      * Active meeting table wins; otherwise nearest table at [position] (cached).
      */
-    fun resolveLocalAcousticTable(position: Offset, activeMeetingTableId: String?): String? {
+    fun resolveLocalAcousticTable(
+        position: Offset,
+        activeMeetingTableId: String?,
+    ): String? {
         if (activeMeetingTableId != null) {
             lastQueryPosition = position
             lastNearestTableId = activeMeetingTableId

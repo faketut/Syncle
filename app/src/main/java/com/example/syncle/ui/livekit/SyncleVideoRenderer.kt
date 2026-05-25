@@ -25,7 +25,7 @@ fun SyncleVideoRenderer(
     room: Room,
     videoTrack: VideoTrack?,
     modifier: Modifier = Modifier,
-    mirror: Boolean = false
+    mirror: Boolean = false,
 ) {
     if (LocalView.current.isInEditMode) {
         Box(modifier = modifier.background(Color.Black))
@@ -41,7 +41,10 @@ fun SyncleVideoRenderer(
         boundVideoTrack = null
     }
 
-    fun setupVideoIfNeeded(track: VideoTrack?, renderer: TextureViewRenderer) {
+    fun setupVideoIfNeeded(
+        track: VideoTrack?,
+        renderer: TextureViewRenderer,
+    ) {
         if (boundVideoTrack == track) return
         cleanupVideoTrack()
         boundVideoTrack = track
@@ -80,6 +83,6 @@ fun SyncleVideoRenderer(
             }
         },
         update = { renderer -> setupVideoIfNeeded(videoTrack, renderer) },
-        modifier = modifier.onGloballyPositioned { videoSinkVisibility.onGloballyPositioned(it) }
+        modifier = modifier.onGloballyPositioned { videoSinkVisibility.onGloballyPositioned(it) },
     )
 }

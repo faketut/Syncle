@@ -48,7 +48,7 @@ data class MeetingParticipant(
     val isSpeaking: Boolean,
     val isMicMuted: Boolean,
     val hasVideo: Boolean,
-    val videoTrack: VideoTrack? = null
+    val videoTrack: VideoTrack? = null,
 )
 
 @Composable
@@ -61,32 +61,34 @@ fun TableMeetingOverlay(
     onToggleMic: () -> Unit,
     onToggleCamera: () -> Unit,
     onLeave: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .fillMaxHeight(0.58f)
-            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-            .background(Color(0xFF1B1B1F))
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.58f)
+                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .background(Color(0xFF1B1B1F)),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = tableTitle,
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
+                    fontWeight = FontWeight.SemiBold,
                 )
                 Text(
                     text = "${participants.size} 人在会议中",
                     color = Color(0xFFB0B0B0),
-                    style = MaterialTheme.typography.bodySmall
+                    style = MaterialTheme.typography.bodySmall,
                 )
             }
             TextButton(onClick = onLeave) {
@@ -98,12 +100,13 @@ fun TableMeetingOverlay(
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(2),
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             items(participants, key = { it.id }) { p ->
                 MeetingParticipantTile(participant = p, room = room)
@@ -111,12 +114,13 @@ fun TableMeetingOverlay(
         }
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(0xFF121216))
-                .padding(vertical = 14.dp, horizontal = 24.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF121216))
+                    .padding(vertical = 14.dp, horizontal = 24.dp),
             horizontalArrangement = Arrangement.SpaceEvenly,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             MeetingControlButton(
                 onClick = onToggleMic,
@@ -125,9 +129,9 @@ fun TableMeetingOverlay(
                     Icon(
                         imageVector = if (micEnabled) Icons.Default.Mic else Icons.Default.MicOff,
                         contentDescription = null,
-                        tint = Color.White
+                        tint = Color.White,
                     )
-                }
+                },
             )
             MeetingControlButton(
                 onClick = onToggleCamera,
@@ -136,9 +140,9 @@ fun TableMeetingOverlay(
                     Icon(
                         imageVector = if (cameraEnabled) Icons.Default.Videocam else Icons.Default.VideocamOff,
                         contentDescription = null,
-                        tint = Color.White
+                        tint = Color.White,
                     )
-                }
+                },
             )
             MeetingControlButton(
                 onClick = onLeave,
@@ -147,9 +151,9 @@ fun TableMeetingOverlay(
                     Icon(
                         imageVector = Icons.Default.CallEnd,
                         contentDescription = null,
-                        tint = Color.White
+                        tint = Color.White,
                     )
-                }
+                },
             )
         }
     }
@@ -159,55 +163,61 @@ fun TableMeetingOverlay(
 private fun MeetingControlButton(
     onClick: () -> Unit,
     containerColor: Color,
-    icon: @Composable () -> Unit
+    icon: @Composable () -> Unit,
 ) {
     FilledIconButton(
         onClick = onClick,
         modifier = Modifier.size(52.dp),
-        colors = IconButtonDefaults.filledIconButtonColors(containerColor = containerColor)
+        colors = IconButtonDefaults.filledIconButtonColors(containerColor = containerColor),
     ) {
         icon()
     }
 }
 
 @Composable
-private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?) {
+private fun MeetingParticipantTile(
+    participant: MeetingParticipant,
+    room: Room?,
+) {
     val borderColor = if (participant.isSpeaking) Color(0xFF4CAF50) else Color(0xFF3A3A42)
     val showVideo = room != null && participant.videoTrack != null
     Box(
-        modifier = Modifier
-            .aspectRatio(1.15f)
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF25252C))
-            .border(2.dp, borderColor, RoundedCornerShape(10.dp))
+        modifier =
+            Modifier
+                .aspectRatio(1.15f)
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF25252C))
+                .border(2.dp, borderColor, RoundedCornerShape(10.dp)),
     ) {
         if (showVideo && room != null) {
             SyncleVideoRenderer(
                 room = room,
                 videoTrack = participant.videoTrack,
                 modifier = Modifier.fillMaxSize(),
-                mirror = participant.isLocal
+                mirror = participant.isLocal,
             )
         }
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(10.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(10.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
             if (!showVideo) {
                 Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(if (participant.isLocal) Color(0xFF00E5FF) else Color(0xFF9E9E9E)),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .size(48.dp)
+                            .clip(CircleShape)
+                            .background(if (participant.isLocal) Color(0xFF00E5FF) else Color(0xFF9E9E9E)),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = participant.displayName.take(1).uppercase(),
                         color = Color.Black,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp
+                        fontSize = 18.sp,
                     )
                 }
             } else {
@@ -218,7 +228,7 @@ private fun MeetingParticipantTile(participant: MeetingParticipant, room: Room?)
                 color = Color.White,
                 fontSize = 13.sp,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (!participant.isMicMuted && participant.isLocal) {
@@ -238,20 +248,21 @@ fun buildMeetingParticipants(
     localMicEnabled: Boolean,
     localCameraEnabled: Boolean,
     localVideoTrack: VideoTrack?,
-    tablePeers: List<RemotePeer>
+    tablePeers: List<RemotePeer>,
 ): List<MeetingParticipant> {
     val localId = localIdentity ?: "local"
-    val list = mutableListOf(
-        MeetingParticipant(
-            id = localId,
-            displayName = localAvatar.name,
-            isLocal = true,
-            isSpeaking = localAvatar.isSpeaking,
-            isMicMuted = !localMicEnabled,
-            hasVideo = localCameraEnabled && localVideoTrack != null,
-            videoTrack = if (localCameraEnabled) localVideoTrack else null
+    val list =
+        mutableListOf(
+            MeetingParticipant(
+                id = localId,
+                displayName = localAvatar.name,
+                isLocal = true,
+                isSpeaking = localAvatar.isSpeaking,
+                isMicMuted = !localMicEnabled,
+                hasVideo = localCameraEnabled && localVideoTrack != null,
+                videoTrack = if (localCameraEnabled) localVideoTrack else null,
+            ),
         )
-    )
     tablePeers.forEach { peer ->
         list.add(
             MeetingParticipant(
@@ -261,8 +272,8 @@ fun buildMeetingParticipants(
                 isSpeaking = peer.isSpeaking,
                 isMicMuted = peer.status == com.example.syncle.domain.UserStatus.QUIET_MODE,
                 hasVideo = peer.videoTrack != null,
-                videoTrack = peer.videoTrack
-            )
+                videoTrack = peer.videoTrack,
+            ),
         )
     }
     return list

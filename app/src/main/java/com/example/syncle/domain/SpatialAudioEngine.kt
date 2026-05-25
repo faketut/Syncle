@@ -1,15 +1,10 @@
 package com.example.syncle.domain
 
-import com.example.syncle.domain.AvatarState
-import com.example.syncle.domain.MapConfig
-import com.example.syncle.domain.RemotePeer
-import com.example.syncle.domain.TablePresence
-import com.example.syncle.domain.UserStatus
 import kotlin.math.abs
 
 class SpatialAudioEngine(
     private val maxDistance: Float = 300f,
-    private val volumeEpsilon: Float = 0.02f
+    private val volumeEpsilon: Float = 0.02f,
 ) {
     private val lastVolumeByPeerId = mutableMapOf<String, Float>()
 
@@ -17,16 +12,17 @@ class SpatialAudioEngine(
         localAvatar: AvatarState,
         peer: RemotePeer,
         mapConfig: MapConfig,
-        localAcousticTableId: String?
+        localAcousticTableId: String?,
     ): Float {
         if (peer.isSpotlighted) return 1.0f
         if (localAvatar.status == UserStatus.QUIET_MODE || peer.status == UserStatus.QUIET_MODE) return 0.0f
 
-        val peerTable = TablePresence.effectiveTableMeetingId(
-            peer.tableMeetingId,
-            peer.position,
-            mapConfig
-        )
+        val peerTable =
+            TablePresence.effectiveTableMeetingId(
+                peer.tableMeetingId,
+                peer.position,
+                mapConfig,
+            )
 
         if (localAcousticTableId != null) {
             return if (peerTable == localAcousticTableId) 1.0f else 0.0f
@@ -40,7 +36,10 @@ class SpatialAudioEngine(
     }
 
     /** @return true if volume was applied (changed beyond epsilon) */
-    fun shouldApplyVolume(peerId: String, newVolume: Float): Boolean {
+    fun shouldApplyVolume(
+        peerId: String,
+        newVolume: Float,
+    ): Boolean {
         val previous = lastVolumeByPeerId[peerId]
         if (previous != null && abs(previous - newVolume) < volumeEpsilon) {
             return false

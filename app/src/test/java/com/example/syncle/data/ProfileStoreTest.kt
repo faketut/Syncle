@@ -11,7 +11,6 @@ import org.junit.Test
  * the room/nickname contract honest without spinning up Android `Context`.
  */
 class ProfileStoreTest {
-
     @Test
     fun roomRegex_acceptsCanonical() {
         assertTrue(ProfileStore.isValidRoom("syncle-office"))

@@ -11,12 +11,16 @@ import com.example.syncle.ui.MeetingParticipant
  */
 
 enum class ConnectionStatus {
-    CONNECTING, CONNECTED, RECONNECTING, DISCONNECTED, ERROR
+    CONNECTING,
+    CONNECTED,
+    RECONNECTING,
+    DISCONNECTED,
+    ERROR,
 }
 
 data class LocalAvatarUi(
     val name: String,
-    val nearbyItemId: String?
+    val nearbyItemId: String?,
 )
 
 data class ConnectionUi(
@@ -45,24 +49,26 @@ data class MeetingUi(
     val tableTitle: String?,
     val participants: List<MeetingParticipant>,
     val micEnabled: Boolean,
-    val cameraEnabled: Boolean
+    val cameraEnabled: Boolean,
 )
 
 data class SyncleUiState(
     val mapReady: Boolean = false,
-    val connection: ConnectionUi = ConnectionUi(
-        status = ConnectionStatus.DISCONNECTED,
-        url = "",
-        token = "",
-        isAutoFetching = false,
-        startupError = null
-    ),
-    val meeting: MeetingUi = MeetingUi(
-        activeTableId = null,
-        tableTitle = null,
-        participants = emptyList(),
-        micEnabled = true,
-        cameraEnabled = false
-    ),
-    val localAvatar: LocalAvatarUi = LocalAvatarUi(name = "Me", nearbyItemId = null)
+    val connection: ConnectionUi =
+        ConnectionUi(
+            status = ConnectionStatus.DISCONNECTED,
+            url = "",
+            token = "",
+            isAutoFetching = false,
+            startupError = null,
+        ),
+    val meeting: MeetingUi =
+        MeetingUi(
+            activeTableId = null,
+            tableTitle = null,
+            participants = emptyList(),
+            micEnabled = true,
+            cameraEnabled = false,
+        ),
+    val localAvatar: LocalAvatarUi = LocalAvatarUi(name = "Me", nearbyItemId = null),
 )

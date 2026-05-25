@@ -9,8 +9,9 @@ import java.util.UUID
  * wipe / uninstall — a fresh deviceId then yields a fresh userId.
  */
 class DeviceIdStore(context: Context) {
-    private val prefs = context.applicationContext
-        .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+    private val prefs =
+        context.applicationContext
+            .getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
     fun getOrCreate(): String {
         prefs.getString(KEY, null)?.let { return it }

@@ -7,6 +7,7 @@ import java.nio.ByteOrder
 class PositionSyncEngine {
     private val encodeBuffer = ByteBuffer.allocate(PACKET_SIZE).order(ByteOrder.LITTLE_ENDIAN)
     private var lastBroadcastPosition: Offset? = null
+
     // Monotonic per-sender sequence. Survives wall-clock jumps (NTP, timezone)
     // that would have caused System.currentTimeMillis() to regress.
     private var nextSeq: Long = 0L
@@ -15,7 +16,10 @@ class PositionSyncEngine {
 
     fun nextSequence(): Long = nextSeq++
 
-    fun encodeIfMoved(position: Offset, seq: Long): ByteArray? {
+    fun encodeIfMoved(
+        position: Offset,
+        seq: Long,
+    ): ByteArray? {
         val last = lastBroadcastPosition
         if (last != null && last.x == position.x && last.y == position.y) {
             return null

@@ -34,7 +34,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -61,14 +60,15 @@ fun SyncleScreen(
     onToggleCamera: () -> Unit,
     onLeaveMeeting: () -> Unit,
     onApplyProfileEdit: (String, String) -> Boolean = { _, _ -> false },
-    liveKitRoom: Room? = null
+    liveKitRoom: Room? = null,
 ) {
     val meeting = uiState.meeting
     val activeTableId = meeting.activeTableId
     val backgroundImage = rememberMapBackground(mapConfig.backgroundImage)
-    val logicWorldSize = remember(mapConfig, backgroundImage) {
-        backgroundImage?.logicalSize ?: mapConfig.mapDrawSize
-    }
+    val logicWorldSize =
+        remember(mapConfig, backgroundImage) {
+            backgroundImage?.logicalSize ?: mapConfig.mapDrawSize
+        }
     var settingsOpen by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -80,7 +80,7 @@ fun SyncleScreen(
             remotePeers = remotePeers,
             onMove = onMove,
             onJoinRoom = onJoinTableMeeting,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
 
         if (activeTableId == null) {
@@ -88,13 +88,14 @@ fun SyncleScreen(
                 room = liveKitRoom,
                 localAvatar = avatarState,
                 remotePeers = remotePeers,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f))
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
             )
             TableMeetingOverlay(
                 tableTitle = meeting.tableTitle ?: activeTableId,
@@ -105,18 +106,20 @@ fun SyncleScreen(
                 onToggleMic = onToggleMic,
                 onToggleCamera = onToggleCamera,
                 onLeave = onLeaveMeeting,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
             )
         }
 
         if (uiState.connection.status == ConnectionStatus.RECONNECTING) {
             ReconnectBanner(
                 attempt = uiState.connection.reconnectAttempt,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(),
             )
         }
 
@@ -125,9 +128,10 @@ fun SyncleScreen(
         if (activeTableId == null) {
             IconButton(
                 onClick = { settingsOpen = true },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(8.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp),
             ) {
                 Icon(Icons.Filled.Settings, contentDescription = "Settings")
             }
@@ -162,9 +166,10 @@ private fun ProfileSettingsSheet(
 
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 16.dp),
         ) {
             Text("Edit profile", style = MaterialTheme.typography.titleMedium)
             Spacer(Modifier.height(12.dp))
@@ -172,8 +177,12 @@ private fun ProfileSettingsSheet(
                 value = nickname,
                 onValueChange = {
                     nickname = it
-                    localError = if (ProfileStore.isValidNickname(it)) null
-                                 else "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})"
+                    localError =
+                        if (ProfileStore.isValidNickname(it)) {
+                            null
+                        } else {
+                            "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})"
+                        }
                 },
                 label = { Text("Nickname") },
                 isError = localError != null,
@@ -208,36 +217,48 @@ private fun ProfileSettingsSheet(
 }
 
 @Composable
-private fun SettingsColorRow(selected: String, onSelect: (String) -> Unit) {
+private fun SettingsColorRow(
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ProfileStore.PALETTE.forEach { hex ->
-            val swatch = try {
-                Color(android.graphics.Color.parseColor(hex))
-            } catch (_: IllegalArgumentException) {
-                MaterialTheme.colorScheme.primary
-            }
+            val swatch =
+                try {
+                    Color(android.graphics.Color.parseColor(hex))
+                } catch (_: IllegalArgumentException) {
+                    MaterialTheme.colorScheme.primary
+                }
             val isSelected = hex.equals(selected, ignoreCase = true)
             Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(swatch, shape = CircleShape)
-                    .border(
-                        width = if (isSelected) 3.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.outline,
-                        shape = CircleShape,
-                    )
-                    .clickable { onSelect(hex) }
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .background(swatch, shape = CircleShape)
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                            shape = CircleShape,
+                        )
+                        .clickable { onSelect(hex) },
             )
         }
     }
 }
 
 @Composable
-private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
+private fun ReconnectBanner(
+    attempt: Int,
+    modifier: Modifier = Modifier,
+) {
     val label = if (attempt > 0) "Reconnecting… (attempt $attempt)" else "Reconnecting…"
     Surface(
         modifier = modifier,
@@ -246,9 +267,10 @@ private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
     ) {
         Text(
             text = label,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
             style = MaterialTheme.typography.labelLarge,
         )
     }
@@ -257,7 +279,7 @@ private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
 @Composable
 fun SyncleScreenHost(
     mapConfig: MapConfig,
-    viewModel: SyncleViewModel
+    viewModel: SyncleViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -272,6 +294,6 @@ fun SyncleScreenHost(
         onToggleCamera = { viewModel.toggleMeetingCamera() },
         onLeaveMeeting = { viewModel.leaveTableMeeting() },
         onApplyProfileEdit = { nick, color -> viewModel.applyProfileEdit(context, nick, color) },
-        liveKitRoom = viewModel.getLiveKitRoom()
+        liveKitRoom = viewModel.getLiveKitRoom(),
     )
 }

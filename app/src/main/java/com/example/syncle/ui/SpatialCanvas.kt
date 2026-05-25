@@ -4,7 +4,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
@@ -33,55 +32,60 @@ fun SpatialCanvas(
     remotePeers: List<RemotePeer>,
     onMove: (Offset) -> Unit,
     onJoinRoom: (tableId: String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val nearbyId = avatarState.nearbyItemId
 
     Canvas(
-        modifier = modifier
-            .fillMaxSize()
-            .pointerInput(nearbyId, avatarState.position, logicWorldSize) {
-                detectTapGestures { tapOffset ->
-                    val screenSize = Size(size.width.toFloat(), size.height.toFloat())
-                    val viewport = MapCamera.compute(
-                        playerX = avatarState.position.x,
-                        playerY = avatarState.position.y,
-                        screenWidth = screenSize.width,
-                        screenHeight = screenSize.height,
-                        logicWidth = logicWorldSize.width,
-                        logicHeight = logicWorldSize.height
-                    )
-                    val worldTap = MapCamera.screenToWorld(
-                        tapOffset.x,
-                        tapOffset.y,
-                        viewport,
-                        screenSize
-                    )
+        modifier =
+            modifier
+                .fillMaxSize()
+                .pointerInput(nearbyId, avatarState.position, logicWorldSize) {
+                    detectTapGestures { tapOffset ->
+                        val screenSize = Size(size.width.toFloat(), size.height.toFloat())
+                        val viewport =
+                            MapCamera.compute(
+                                playerX = avatarState.position.x,
+                                playerY = avatarState.position.y,
+                                screenWidth = screenSize.width,
+                                screenHeight = screenSize.height,
+                                logicWidth = logicWorldSize.width,
+                                logicHeight = logicWorldSize.height,
+                            )
+                        val worldTap =
+                            MapCamera.screenToWorld(
+                                tapOffset.x,
+                                tapOffset.y,
+                                viewport,
+                                screenSize,
+                            )
 
-                    val joinTableId = TablePresence.tableIdForJoinTap(
-                        avatarState.position,
-                        worldTap,
-                        mapConfig
-                    )
-                    if (joinTableId != null) {
-                        onJoinRoom(joinTableId)
-                        return@detectTapGestures
+                        val joinTableId =
+                            TablePresence.tableIdForJoinTap(
+                                avatarState.position,
+                                worldTap,
+                                mapConfig,
+                            )
+                        if (joinTableId != null) {
+                            onJoinRoom(joinTableId)
+                            return@detectTapGestures
+                        }
+
+                        val delta = worldTap - avatarState.position
+                        onMove(delta)
                     }
-
-                    val delta = worldTap - avatarState.position
-                    onMove(delta)
-                }
-            }
+                },
     ) {
         val screenSize = size
-        val viewport = MapCamera.compute(
-            playerX = avatarState.position.x,
-            playerY = avatarState.position.y,
-            screenWidth = screenSize.width,
-            screenHeight = screenSize.height,
-            logicWidth = logicWorldSize.width,
-            logicHeight = logicWorldSize.height
-        )
+        val viewport =
+            MapCamera.compute(
+                playerX = avatarState.position.x,
+                playerY = avatarState.position.y,
+                screenWidth = screenSize.width,
+                screenHeight = screenSize.height,
+                logicWidth = logicWorldSize.width,
+                logicHeight = logicWorldSize.height,
+            )
 
         drawBackgroundCover(backgroundImage, viewport, screenSize)
 
@@ -91,17 +95,18 @@ fun SpatialCanvas(
             }
         }
 
-        val localScreen = MapCamera.worldToScreen(
-            avatarState.position.x,
-            avatarState.position.y,
-            viewport,
-            screenSize
-        )
+        val localScreen =
+            MapCamera.worldToScreen(
+                avatarState.position.x,
+                avatarState.position.y,
+                viewport,
+                screenSize,
+            )
         drawAvatarDot(
             center = localScreen,
             radiusPx = avatarState.radius * viewport.scale,
             fillColor = LocalAvatarColor,
-            showSpeakingHalo = avatarState.isSpeaking
+            showSpeakingHalo = avatarState.isSpeaking,
         )
 
         remotePeers.forEach { peer ->
@@ -110,7 +115,7 @@ fun SpatialCanvas(
                 center = peerScreen,
                 radiusPx = avatarState.radius * viewport.scale,
                 fillColor = RemoteAvatarColor,
-                showSpeakingHalo = peer.isSpeaking
+                showSpeakingHalo = peer.isSpeaking,
             )
         }
     }
@@ -122,7 +127,7 @@ fun SpatialCanvas(
 private fun DrawScope.drawTableInteractionEdgeHighlight(
     tableRect: Rect,
     viewport: MapViewport,
-    screenSize: Size
+    screenSize: Size,
 ) {
     val topLeft = MapCamera.worldToScreen(tableRect.left, tableRect.top, viewport, screenSize)
     val bottomRight = MapCamera.worldToScreen(tableRect.right, tableRect.bottom, viewport, screenSize)
@@ -131,14 +136,15 @@ private fun DrawScope.drawTableInteractionEdgeHighlight(
     if (width <= 1f || height <= 1f) return
 
     val strokeBase = (2.5f * viewport.scale).coerceIn(1.5f, 5f)
-    val expandSteps = listOf(
-        14f to 0.06f,
-        10f to 0.12f,
-        7f to 0.22f,
-        4f to 0.38f,
-        2f to 0.58f,
-        0f to 0.88f
-    )
+    val expandSteps =
+        listOf(
+            14f to 0.06f,
+            10f to 0.12f,
+            7f to 0.22f,
+            4f to 0.38f,
+            2f to 0.58f,
+            0f to 0.88f,
+        )
 
     expandSteps.forEach { (expandPx, alpha) ->
         val pad = expandPx * viewport.scale.coerceIn(0.5f, 2f)
@@ -146,7 +152,7 @@ private fun DrawScope.drawTableInteractionEdgeHighlight(
             color = Color.White.copy(alpha = alpha),
             topLeft = topLeft - Offset(pad, pad),
             size = Size(width + pad * 2f, height + pad * 2f),
-            style = Stroke(width = strokeBase)
+            style = Stroke(width = strokeBase),
         )
     }
 }
@@ -154,7 +160,7 @@ private fun DrawScope.drawTableInteractionEdgeHighlight(
 private fun DrawScope.drawBackgroundCover(
     image: ImageBitmap?,
     viewport: MapViewport,
-    screenSize: Size
+    screenSize: Size,
 ) {
     if (image == null) {
         drawRect(color = Color(0xFF1A1A2E), size = screenSize)
@@ -165,15 +171,16 @@ private fun DrawScope.drawBackgroundCover(
     val mapH = viewport.logicHeight
     val scaledW = mapW * viewport.scale
     val scaledH = mapH * viewport.scale
-    val topLeft = Offset(
-        x = screenSize.width / 2f - viewport.camX * viewport.scale,
-        y = screenSize.height / 2f - viewport.camY * viewport.scale
-    )
+    val topLeft =
+        Offset(
+            x = screenSize.width / 2f - viewport.camX * viewport.scale,
+            y = screenSize.height / 2f - viewport.camY * viewport.scale,
+        )
 
     drawImage(
         image = image,
         dstOffset = androidx.compose.ui.unit.IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
-        dstSize = androidx.compose.ui.unit.IntSize(scaledW.roundToInt(), scaledH.roundToInt())
+        dstSize = androidx.compose.ui.unit.IntSize(scaledW.roundToInt(), scaledH.roundToInt()),
     )
 }
 
@@ -181,13 +188,13 @@ private fun DrawScope.drawAvatarDot(
     center: Offset,
     radiusPx: Float,
     fillColor: Color,
-    showSpeakingHalo: Boolean
+    showSpeakingHalo: Boolean,
 ) {
     if (showSpeakingHalo) {
         drawCircle(
             color = SpeakingHalo,
             radius = radiusPx * 1.45f,
-            center = center
+            center = center,
         )
     }
     drawCircle(color = fillColor, radius = radiusPx.coerceAtLeast(4f), center = center)

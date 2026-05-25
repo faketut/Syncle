@@ -12,18 +12,17 @@ import com.example.syncle.data.ProfileStore
 import com.example.syncle.data.RoomStateReporter
 import com.example.syncle.data.SnapshotApi
 import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.LiveKitEvent
 import com.example.syncle.domain.MapConfig
 import com.example.syncle.domain.MapConfigCache
-import com.example.syncle.domain.RemotePeer
-import com.example.syncle.domain.TablePresence
-import com.example.syncle.domain.UserStatus
-import com.example.syncle.domain.LiveKitEvent
 import com.example.syncle.domain.PeerRegistry
 import com.example.syncle.domain.PositionSyncEngine
 import com.example.syncle.domain.ReconnectPolicy
 import com.example.syncle.domain.SpatialAudioEngine
 import com.example.syncle.domain.SyncleLog
 import com.example.syncle.domain.TableMeetingController
+import com.example.syncle.domain.TablePresence
+import com.example.syncle.domain.UserStatus
 import com.example.syncle.ui.buildMeetingParticipants
 import com.example.syncle.ui.state.ConnectionStatus
 import com.example.syncle.ui.state.ConnectionUi
@@ -43,7 +42,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class SyncleViewModel : ViewModel() {
     val avatarState = AvatarState(initialPosition = Offset(100f, 100f))
@@ -114,10 +112,11 @@ class SyncleViewModel : ViewModel() {
         // code path forgets to call pushUiState(), the meeting room
         // participant list (which is derived from peerRegistry.snapshot()
         // and meeting.activeTableMeetingId) still stays in sync.
-        derivedUiJob = viewModelScope.launch {
-            combine(peerRegistry.revision, meeting.activeTableIdFlow) { _, _ -> Unit }
-                .collect { pushUiState() }
-        }
+        derivedUiJob =
+            viewModelScope.launch {
+                combine(peerRegistry.revision, meeting.activeTableIdFlow) { _, _ -> Unit }
+                    .collect { pushUiState() }
+            }
     }
 
     fun setMapConfig(config: MapConfig) {
@@ -139,21 +138,24 @@ class SyncleViewModel : ViewModel() {
     val connectionStatus: ConnectionStatus get() = _uiState.value.connection.status
 
     fun setUrl(value: String) = updateConnection { it.copy(url = value) }
+
     fun setToken(value: String) = updateConnection { it.copy(token = value) }
 
     /**
      * #46: update the nickname in the UI without persisting. Persisted on Join.
      */
-    fun setNickname(value: String) = updateConnection {
-        val trimmed = value.trim()
-        val err = when {
-            trimmed.isEmpty() -> "Nickname required"
-            trimmed.length > ProfileStore.NICKNAME_MAX_LEN ->
-                "Max ${ProfileStore.NICKNAME_MAX_LEN} chars"
-            else -> null
+    fun setNickname(value: String) =
+        updateConnection {
+            val trimmed = value.trim()
+            val err =
+                when {
+                    trimmed.isEmpty() -> "Nickname required"
+                    trimmed.length > ProfileStore.NICKNAME_MAX_LEN ->
+                        "Max ${ProfileStore.NICKNAME_MAX_LEN} chars"
+                    else -> null
+                }
+            it.copy(nickname = value, nicknameError = err)
         }
-        it.copy(nickname = value, nicknameError = err)
-    }
 
     /** #46: pick an accent color from [ProfileStore.PALETTE]. */
     fun setColor(value: String) = updateConnection { it.copy(color = value) }
@@ -162,17 +164,19 @@ class SyncleViewModel : ViewModel() {
      * #40: update the room name in the UI without persisting. Validation is
      * deferred until the user taps Join so they can type freely.
      */
-    fun setRoom(value: String) = updateConnection {
-        val trimmed = value.trim()
-        val err = when {
-            trimmed.isEmpty() -> null // let placeholder handle empty
-            ProfileStore.isValidRoom(trimmed) -> null
-            else -> "Use 3-64 chars: a-z, 0-9, -"
+    fun setRoom(value: String) =
+        updateConnection {
+            val trimmed = value.trim()
+            val err =
+                when {
+                    trimmed.isEmpty() -> null // let placeholder handle empty
+                    ProfileStore.isValidRoom(trimmed) -> null
+                    else -> "Use 3-64 chars: a-z, 0-9, -"
+                }
+            it.copy(room = value, roomError = err)
         }
-        it.copy(room = value, roomError = err)
-    }
-    fun reportStartupError(message: String) =
-        updateConnection { it.copy(startupError = message) }
+
+    fun reportStartupError(message: String) = updateConnection { it.copy(startupError = message) }
 
     private inline fun updateConnection(transform: (ConnectionUi) -> ConnectionUi) {
         _uiState.value = _uiState.value.let { s -> s.copy(connection = transform(s.connection)) }
@@ -190,20 +194,23 @@ class SyncleViewModel : ViewModel() {
                 sessionRoom = room
                 avatarState.name = profile.nickname
                 sessionProfile = profile
-                updateConnection { it.copy(
-                    room = room,
-                    roomError = null,
-                    nickname = profile.nickname,
-                    nicknameError = null,
-                    color = profile.color,
-                ) }
+                updateConnection {
+                    it.copy(
+                        room = room,
+                        roomError = null,
+                        nickname = profile.nickname,
+                        nicknameError = null,
+                        color = profile.color,
+                    )
+                }
                 SyncleLog.d("Fetching session: deviceId=$deviceId nick=${profile.nickname} room=$room")
-                val details = authRepository.fetchSession(
-                    deviceId = deviceId,
-                    nickname = profile.nickname,
-                    color = profile.color,
-                    room = sessionRoom,
-                )
+                val details =
+                    authRepository.fetchSession(
+                        deviceId = deviceId,
+                        nickname = profile.nickname,
+                        color = profile.color,
+                        room = sessionRoom,
+                    )
                 if (details != null) {
                     sessionUserId = details.userId
                     sessionExpiresAt = details.expiresAt
@@ -212,8 +219,12 @@ class SyncleViewModel : ViewModel() {
                     }
                     SyncleLog.d("Session fetch success userId=${details.userId} expiresAt=${details.expiresAt}")
                 } else {
-                    updateConnection { it.copy(startupError =
-                        "Backend session fetch failed. Check syncle.backend_url in local.properties and that the server is reachable.") }
+                    updateConnection {
+                        it.copy(
+                            startupError =
+                                "Backend session fetch failed. Check syncle.backend_url in local.properties and that the server is reachable.",
+                        )
+                    }
                     SyncleLog.w("Session fetch returned null")
                 }
             } catch (e: Exception) {
@@ -228,13 +239,18 @@ class SyncleViewModel : ViewModel() {
     fun connect(context: Context) {
         if (connectionStatus == ConnectionStatus.CONNECTING ||
             connectionStatus == ConnectionStatus.CONNECTED ||
-            connectionStatus == ConnectionStatus.RECONNECTING) return
+            connectionStatus == ConnectionStatus.RECONNECTING
+        ) {
+            return
+        }
         val cache = mapCache
         if (cache == null) {
-            updateConnection { it.copy(
-                status = ConnectionStatus.ERROR,
-                lastConnectError = "Map not loaded yet. Wait a moment and try again."
-            ) }
+            updateConnection {
+                it.copy(
+                    status = ConnectionStatus.ERROR,
+                    lastConnectError = "Map not loaded yet. Wait a moment and try again.",
+                )
+            }
             return
         }
 
@@ -260,9 +276,10 @@ class SyncleViewModel : ViewModel() {
             return
         }
         val priorProfile = sessionProfile
-        val profileChanged = priorProfile == null ||
-            priorProfile.nickname != typedNick ||
-            priorProfile.color != typedColor
+        val profileChanged =
+            priorProfile == null ||
+                priorProfile.nickname != typedNick ||
+                priorProfile.color != typedColor
         if (profileChanged) {
             val updated = Profile(nickname = typedNick, color = typedColor)
             store.update(updated)
@@ -293,13 +310,20 @@ class SyncleViewModel : ViewModel() {
      * the [scheduleReconnect] retry loop. Caller is responsible for the UI
      * status transition into CONNECTING / RECONNECTING before calling.
      */
-    private suspend fun attemptConnect(cache: MapConfigCache, isInitial: Boolean) {
+    private suspend fun attemptConnect(
+        cache: MapConfigCache,
+        isInitial: Boolean,
+    ) {
         // Tear down any previous LiveKitService — on reconnect the old Room
         // is already dead, but disconnect() is idempotent and cheap.
         val old = liveKitService
         if (old != null) {
             liveKitService = null
-            try { old.disconnect() } catch (_: Exception) { /* best-effort */ }
+            try {
+                old.disconnect()
+            } catch (_: Exception) {
+                // best-effort
+            }
         }
         val ctx = appContext ?: return
         val service = LiveKitService(ctx)
@@ -309,11 +333,13 @@ class SyncleViewModel : ViewModel() {
         val state = _uiState.value.connection
         val result = service.connect(state.url, state.token)
         if (result.success) {
-            updateConnection { it.copy(
-                status = ConnectionStatus.CONNECTED,
-                lastConnectError = null,
-                reconnectAttempt = 0,
-            ) }
+            updateConnection {
+                it.copy(
+                    status = ConnectionStatus.CONNECTED,
+                    lastConnectError = null,
+                    reconnectAttempt = 0,
+                )
+            }
             reconnectAttempt = 0
             publishLocalProfileAttribute()
             seedFromSnapshot()
@@ -348,32 +374,37 @@ class SyncleViewModel : ViewModel() {
         reconnectAttempt += 1
         val attempt = reconnectAttempt
         if (ReconnectPolicy.shouldGiveUp(attempt)) {
-            updateConnection { it.copy(
-                status = ConnectionStatus.ERROR,
-                lastConnectError = "Reconnect gave up after ${attempt - 1} attempts. ${reason ?: ""}".trim()
-            ) }
+            updateConnection {
+                it.copy(
+                    status = ConnectionStatus.ERROR,
+                    lastConnectError = "Reconnect gave up after ${attempt - 1} attempts. ${reason ?: ""}".trim(),
+                )
+            }
             SyncleLog.w("Reconnect: giving up after ${attempt - 1} attempts")
             return
         }
         val delayMs = ReconnectPolicy.delayMsForAttempt(attempt)
         SyncleLog.d("Reconnect: attempt $attempt scheduled in ${delayMs}ms (reason=$reason)")
-        updateConnection { it.copy(
-            status = ConnectionStatus.RECONNECTING,
-            lastConnectError = reason,
-            reconnectAttempt = attempt,
-        ) }
-        reconnectJob = viewModelScope.launch {
-            delay(delayMs)
-            if (userInitiatedDisconnect.get()) return@launch
-            // Refresh JWT if it's expired or within 60s of expiring.
-            val now = System.currentTimeMillis()
-            if (sessionExpiresAt > 0L && now >= sessionExpiresAt - 60_000L) {
-                val ctx = appContext ?: return@launch
-                SyncleLog.d("Reconnect: token expired/near-expiry, refetching session")
-                refreshSession(ctx)
-            }
-            attemptConnect(cache, isInitial = false)
+        updateConnection {
+            it.copy(
+                status = ConnectionStatus.RECONNECTING,
+                lastConnectError = reason,
+                reconnectAttempt = attempt,
+            )
         }
+        reconnectJob =
+            viewModelScope.launch {
+                delay(delayMs)
+                if (userInitiatedDisconnect.get()) return@launch
+                // Refresh JWT if it's expired or within 60s of expiring.
+                val now = System.currentTimeMillis()
+                if (sessionExpiresAt > 0L && now >= sessionExpiresAt - 60_000L) {
+                    val ctx = appContext ?: return@launch
+                    SyncleLog.d("Reconnect: token expired/near-expiry, refetching session")
+                    refreshSession(ctx)
+                }
+                attemptConnect(cache, isInitial = false)
+            }
     }
 
     /** Refresh the JWT in-place, preserving sessionRoom/profile. */
@@ -381,12 +412,13 @@ class SyncleViewModel : ViewModel() {
         try {
             val deviceId = DeviceIdStore(context).getOrCreate()
             val profile = sessionProfile ?: ProfileStore(context).get()
-            val details = authRepository.fetchSession(
-                deviceId = deviceId,
-                nickname = profile.nickname,
-                color = profile.color,
-                room = sessionRoom,
-            ) ?: return
+            val details =
+                authRepository.fetchSession(
+                    deviceId = deviceId,
+                    nickname = profile.nickname,
+                    color = profile.color,
+                    room = sessionRoom,
+                ) ?: return
             sessionUserId = details.userId
             sessionExpiresAt = details.expiresAt
             updateConnection { it.copy(url = details.serverUrl, token = details.token) }
@@ -397,34 +429,35 @@ class SyncleViewModel : ViewModel() {
 
     private fun collectLiveKitEvents(service: LiveKitService) {
         eventsJob?.cancel()
-        eventsJob = viewModelScope.launch {
-            service.events.collect { event ->
-                when (event) {
-                    is LiveKitEvent.DataReceived -> onDataReceived(event.participantId, event.data)
-                    is LiveKitEvent.ParticipantConnected -> onParticipantConnected(event.participantId, event.name, event.attributes)
-                    is LiveKitEvent.ParticipantDisconnected -> onParticipantDisconnected(event.participantId)
-                    is LiveKitEvent.VideoTrackSubscribed -> onVideoTrackSubscribed(event.participantId, event.track)
-                    is LiveKitEvent.LocalVideoTrackChanged -> pushUiState()
-                    is LiveKitEvent.ActiveSpeakersChanged -> onActiveSpeakersChanged(event.speakingIds)
-                    is LiveKitEvent.ParticipantAttributesChanged -> onParticipantAttributes(event.participantId, event.attributes)
-                    is LiveKitEvent.ConnectionQualityChanged -> onConnectionQualityChanged(event.participantId, event.quality)
-                    is LiveKitEvent.Reconnecting -> {
-                        // SDK-driven transient retry; surface it but don't tear down our state.
-                        updateConnection { it.copy(status = ConnectionStatus.RECONNECTING) }
-                    }
-                    is LiveKitEvent.Reconnected -> {
-                        reconnectAttempt = 0
-                        updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
-                    }
-                    is LiveKitEvent.Disconnected -> {
-                        // SDK gave up. Drive our own back-off unless the user pulled the plug.
-                        if (!userInitiatedDisconnect.get()) {
-                            scheduleReconnect(reason = event.reason)
+        eventsJob =
+            viewModelScope.launch {
+                service.events.collect { event ->
+                    when (event) {
+                        is LiveKitEvent.DataReceived -> onDataReceived(event.participantId, event.data)
+                        is LiveKitEvent.ParticipantConnected -> onParticipantConnected(event.participantId, event.name, event.attributes)
+                        is LiveKitEvent.ParticipantDisconnected -> onParticipantDisconnected(event.participantId)
+                        is LiveKitEvent.VideoTrackSubscribed -> onVideoTrackSubscribed(event.participantId, event.track)
+                        is LiveKitEvent.LocalVideoTrackChanged -> pushUiState()
+                        is LiveKitEvent.ActiveSpeakersChanged -> onActiveSpeakersChanged(event.speakingIds)
+                        is LiveKitEvent.ParticipantAttributesChanged -> onParticipantAttributes(event.participantId, event.attributes)
+                        is LiveKitEvent.ConnectionQualityChanged -> onConnectionQualityChanged(event.participantId, event.quality)
+                        is LiveKitEvent.Reconnecting -> {
+                            // SDK-driven transient retry; surface it but don't tear down our state.
+                            updateConnection { it.copy(status = ConnectionStatus.RECONNECTING) }
+                        }
+                        is LiveKitEvent.Reconnected -> {
+                            reconnectAttempt = 0
+                            updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
+                        }
+                        is LiveKitEvent.Disconnected -> {
+                            // SDK gave up. Drive our own back-off unless the user pulled the plug.
+                            if (!userInitiatedDisconnect.get()) {
+                                scheduleReconnect(reason = event.reason)
+                            }
                         }
                     }
                 }
             }
-        }
     }
 
     fun onMove(delta: Offset) {
@@ -478,64 +511,74 @@ class SyncleViewModel : ViewModel() {
         // inside is either pure Kotlin (positionSync, meeting state,
         // MapConfigCache), atomic (spatialDirty), or LiveKit SDK calls that
         // are safe off the main thread (publishData / track volume).
-        syncJob = viewModelScope.launch(Dispatchers.Default) {
-            while (isActive) {
-                val seq = positionSync.nextSequence()
-                val payload = positionSync.encodeIfMoved(avatarState.position, seq)
-                if (payload != null) {
-                    liveKitService?.publishPosition(payload)
+        syncJob =
+            viewModelScope.launch(Dispatchers.Default) {
+                while (isActive) {
+                    val seq = positionSync.nextSequence()
+                    val payload = positionSync.encodeIfMoved(avatarState.position, seq)
+                    if (payload != null) {
+                        liveKitService?.publishPosition(payload)
+                    }
+                    // syncPresence + updateSpatialAudio iterate every remote
+                    // participant and allocate a participantByIdentity map; skip
+                    // when neither the local avatar nor any remote target has
+                    // moved since the last tick. encodeIfMoved already short-
+                    // circuits its own publish, so this just guards the heavy
+                    // per-peer work.
+                    if (spatialDirty.getAndSet(false)) {
+                        meeting.syncPresence(cache)
+                        val acousticTable =
+                            cache.resolveLocalAcousticTable(
+                                avatarState.position,
+                                meeting.activeTableMeetingId,
+                            )
+                        liveKitService?.updateSpatialAudio(
+                            peerRegistry.snapshot(),
+                            avatarState,
+                            mapConfig,
+                            acousticTable,
+                            spatialAudio,
+                        )
+                    }
+                    delay(50)
                 }
-                // syncPresence + updateSpatialAudio iterate every remote
-                // participant and allocate a participantByIdentity map; skip
-                // when neither the local avatar nor any remote target has
-                // moved since the last tick. encodeIfMoved already short-
-                // circuits its own publish, so this just guards the heavy
-                // per-peer work.
-                if (spatialDirty.getAndSet(false)) {
-                    meeting.syncPresence(cache)
-                    val acousticTable = cache.resolveLocalAcousticTable(
-                        avatarState.position,
-                        meeting.activeTableMeetingId
-                    )
-                    liveKitService?.updateSpatialAudio(
-                        peerRegistry.snapshot(),
-                        avatarState,
-                        mapConfig,
-                        acousticTable,
-                        spatialAudio
-                    )
-                }
-                delay(50)
             }
-        }
     }
 
     private fun startInterpolationLoop() {
         // #34: same rationale as startSyncLoop — peer interpolation math
         // and the spatialDirty toggle don't need the Main thread.
-        lerpJob = viewModelScope.launch(Dispatchers.Default) {
-            while (isActive) {
-                var anyMoving = false
-                peerRegistry.forEach { peer ->
-                    if (peer.position != peer.targetPosition) {
-                        peer.interpolate(0.2f)
-                        anyMoving = true
+        lerpJob =
+            viewModelScope.launch(Dispatchers.Default) {
+                while (isActive) {
+                    var anyMoving = false
+                    peerRegistry.forEach { peer ->
+                        if (peer.position != peer.targetPosition) {
+                            peer.interpolate(0.2f)
+                            anyMoving = true
+                        }
                     }
+                    // Peer.position drives spatial volume; keep the sync loop
+                    // doing work while any peer is animating toward its target.
+                    if (anyMoving) spatialDirty.set(true)
+                    delay(if (anyMoving) 16 else 50)
                 }
-                // Peer.position drives spatial volume; keep the sync loop
-                // doing work while any peer is animating toward its target.
-                if (anyMoving) spatialDirty.set(true)
-                delay(if (anyMoving) 16 else 50)
             }
-        }
     }
 
-    private fun onDataReceived(participantId: String, data: ByteArray) {
+    private fun onDataReceived(
+        participantId: String,
+        data: ByteArray,
+    ) {
         val packet = positionSync.decode(data) ?: return
         updatePeerPosition(participantId, Offset(packet.x, packet.y), packet.seq)
     }
 
-    private fun updatePeerPosition(id: String, position: Offset, seq: Long) {
+    private fun updatePeerPosition(
+        id: String,
+        position: Offset,
+        seq: Long,
+    ) {
         val peer = peerRegistry.getOrCreate(id, position)
         if (seq >= peer.lastSequence) {
             peer.targetPosition = position
@@ -544,7 +587,11 @@ class SyncleViewModel : ViewModel() {
         }
     }
 
-    private fun onParticipantConnected(id: String, name: String?, attributes: Map<String, String>) {
+    private fun onParticipantConnected(
+        id: String,
+        name: String?,
+        attributes: Map<String, String>,
+    ) {
         // Register the peer immediately so they're visible even before they move
         // (no position packets) or change any attribute (initial attrs are already published).
         val peer = peerRegistry.getOrCreate(id)
@@ -566,7 +613,10 @@ class SyncleViewModel : ViewModel() {
         pushUiState()
     }
 
-    private fun onVideoTrackSubscribed(id: String, track: io.livekit.android.room.track.VideoTrack) {
+    private fun onVideoTrackSubscribed(
+        id: String,
+        track: io.livekit.android.room.track.VideoTrack,
+    ) {
         peerRegistry.getOrCreate(id).videoTrack = track
         // Bump registry revision so pushUiState()'s participant cache key
         // changes; otherwise a new remote video tile won't appear until some
@@ -592,7 +642,10 @@ class SyncleViewModel : ViewModel() {
         pushUiState()
     }
 
-    private fun onParticipantAttributes(id: String, attributes: Map<String, String>) {
+    private fun onParticipantAttributes(
+        id: String,
+        attributes: Map<String, String>,
+    ) {
         // Use getOrCreate so that an attribute event arriving before any position/connect
         // event still materializes the peer.
         val peer = peerRegistry.getOrCreate(id)
@@ -600,11 +653,12 @@ class SyncleViewModel : ViewModel() {
         var changed = false
         val statusStr = attributes["status"]
         if (statusStr != null) {
-            val status = try {
-                UserStatus.valueOf(statusStr)
-            } catch (_: Exception) {
-                UserStatus.AVAILABLE
-            }
+            val status =
+                try {
+                    UserStatus.valueOf(statusStr)
+                } catch (_: Exception) {
+                    UserStatus.AVAILABLE
+                }
             if (peer.status != status) {
                 peer.status = status
                 changed = true
@@ -641,7 +695,7 @@ class SyncleViewModel : ViewModel() {
             mapOf(
                 ATTR_COLOR to profile.color,
                 ATTR_NICKNAME to profile.nickname,
-            )
+            ),
         )
     }
 
@@ -652,24 +706,32 @@ class SyncleViewModel : ViewModel() {
      * Returns true on success; false when the input failed validation (the
      * caller can rely on UI state already carrying the inline error).
      */
-    fun applyProfileEdit(context: Context, nickname: String, color: String): Boolean {
+    fun applyProfileEdit(
+        context: Context,
+        nickname: String,
+        color: String,
+    ): Boolean {
         val trimmedNick = nickname.trim()
         if (!ProfileStore.isValidNickname(trimmedNick)) {
-            updateConnection { it.copy(
-                nickname = nickname,
-                nicknameError = "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})",
-            ) }
+            updateConnection {
+                it.copy(
+                    nickname = nickname,
+                    nicknameError = "Nickname required (max ${ProfileStore.NICKNAME_MAX_LEN})",
+                )
+            }
             return false
         }
         val updated = Profile(nickname = trimmedNick, color = color)
         ProfileStore(context).update(updated)
         sessionProfile = updated
         avatarState.name = trimmedNick
-        updateConnection { it.copy(
-            nickname = trimmedNick,
-            nicknameError = null,
-            color = color,
-        ) }
+        updateConnection {
+            it.copy(
+                nickname = trimmedNick,
+                nicknameError = null,
+                color = color,
+            )
+        }
         publishLocalProfileAttribute()
         pushUiState()
         return true
@@ -722,26 +784,30 @@ class SyncleViewModel : ViewModel() {
         val userId = sessionUserId ?: return
         val token = _uiState.value.connection.token
         if (token.isEmpty()) return
-        reporterJob = viewModelScope.launch {
-            while (isActive) {
-                stateReporter.report(
-                    room = sessionRoom,
-                    userId = userId,
-                    token = token,
-                    tableId = meeting.activeTableMeetingId,
-                    position = avatarState.position,
-                )
-                // Re-pull the room snapshot from the backend so peers' tableId,
-                // position, nickname and color stay fresh even if LiveKit
-                // attribute / data events are delayed or dropped. Backend is the
-                // source of truth.
-                seedFromSnapshot()
-                delay(REPORTER_INTERVAL_MS)
+        reporterJob =
+            viewModelScope.launch {
+                while (isActive) {
+                    stateReporter.report(
+                        room = sessionRoom,
+                        userId = userId,
+                        token = token,
+                        tableId = meeting.activeTableMeetingId,
+                        position = avatarState.position,
+                    )
+                    // Re-pull the room snapshot from the backend so peers' tableId,
+                    // position, nickname and color stay fresh even if LiveKit
+                    // attribute / data events are delayed or dropped. Backend is the
+                    // source of truth.
+                    seedFromSnapshot()
+                    delay(REPORTER_INTERVAL_MS)
+                }
             }
-        }
     }
 
-    private fun onConnectionQualityChanged(id: String, quality: io.livekit.android.room.participant.ConnectionQuality) {
+    private fun onConnectionQualityChanged(
+        id: String,
+        quality: io.livekit.android.room.participant.ConnectionQuality,
+    ) {
         val localIdentity = liveKitService?.getLocalIdentity()
         if (id == localIdentity) {
             if (avatarState.connectionQuality != quality) {
@@ -826,51 +892,57 @@ class SyncleViewModel : ViewModel() {
         val cache = mapCache
         val localIdentity = liveKitService?.getLocalIdentity()
         val localVideo = liveKitService?.getLocalVideoTrack()
-        val participants = if (cache == null || meetingId == null) {
-            participantsCacheKey = null
-            participantsCache = emptyList()
-            emptyList()
-        } else {
-            val key = ParticipantsKey(
-                meetingId = meetingId,
-                micEnabled = meeting.meetingMicEnabled,
-                cameraEnabled = meeting.meetingCameraEnabled,
-                localIdentity = localIdentity,
-                localVideoTrack = localVideo,
-                peerRevision = peerRegistry.revision.value,
-                localName = avatarState.name,
-                localSpeaking = avatarState.isSpeaking,
-            )
-            if (key == participantsCacheKey) {
-                participantsCache
+        val participants =
+            if (cache == null || meetingId == null) {
+                participantsCacheKey = null
+                participantsCache = emptyList()
+                emptyList()
             } else {
-                val fresh = buildMeetingParticipants(
-                    localAvatar = avatarState,
-                    localIdentity = localIdentity,
-                    localMicEnabled = meeting.meetingMicEnabled,
-                    localCameraEnabled = meeting.meetingCameraEnabled,
-                    localVideoTrack = localVideo,
-                    tablePeers = meeting.peersAtTable(meetingId, cache.config, peerRegistry.snapshot())
-                )
-                participantsCacheKey = key
-                participantsCache = fresh
-                fresh
+                val key =
+                    ParticipantsKey(
+                        meetingId = meetingId,
+                        micEnabled = meeting.meetingMicEnabled,
+                        cameraEnabled = meeting.meetingCameraEnabled,
+                        localIdentity = localIdentity,
+                        localVideoTrack = localVideo,
+                        peerRevision = peerRegistry.revision.value,
+                        localName = avatarState.name,
+                        localSpeaking = avatarState.isSpeaking,
+                    )
+                if (key == participantsCacheKey) {
+                    participantsCache
+                } else {
+                    val fresh =
+                        buildMeetingParticipants(
+                            localAvatar = avatarState,
+                            localIdentity = localIdentity,
+                            localMicEnabled = meeting.meetingMicEnabled,
+                            localCameraEnabled = meeting.meetingCameraEnabled,
+                            localVideoTrack = localVideo,
+                            tablePeers = meeting.peersAtTable(meetingId, cache.config, peerRegistry.snapshot()),
+                        )
+                    participantsCacheKey = key
+                    participantsCache = fresh
+                    fresh
+                }
             }
-        }
-        _uiState.value = _uiState.value.copy(
-            mapReady = ready,
-            meeting = MeetingUi(
-                activeTableId = meetingId,
-                tableTitle = meetingId?.let { id -> config?.let { meeting.tableDisplayName(id, it) } },
-                participants = participants,
-                micEnabled = meeting.meetingMicEnabled,
-                cameraEnabled = meeting.meetingCameraEnabled
-            ),
-            localAvatar = LocalAvatarUi(
-                name = avatarState.name,
-                nearbyItemId = avatarState.nearbyItemId
+        _uiState.value =
+            _uiState.value.copy(
+                mapReady = ready,
+                meeting =
+                    MeetingUi(
+                        activeTableId = meetingId,
+                        tableTitle = meetingId?.let { id -> config?.let { meeting.tableDisplayName(id, it) } },
+                        participants = participants,
+                        micEnabled = meeting.meetingMicEnabled,
+                        cameraEnabled = meeting.meetingCameraEnabled,
+                    ),
+                localAvatar =
+                    LocalAvatarUi(
+                        name = avatarState.name,
+                        nearbyItemId = avatarState.nearbyItemId,
+                    ),
             )
-        )
     }
 
     private companion object {
