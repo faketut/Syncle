@@ -49,6 +49,10 @@ data class MeetingParticipant(
     val isMicMuted: Boolean,
     val hasVideo: Boolean,
     val videoTrack: VideoTrack? = null,
+    /** Accent color hex (e.g. "#4F8EF7"). Drives the avatar background. */
+    val color: String = "#9E9E9E",
+    /** Pixel-art character id (see ProfileStore.CHARACTERS). Null falls back to initial. */
+    val character: String? = null,
 )
 
 @Composable
@@ -205,20 +209,38 @@ private fun MeetingParticipantTile(
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
             if (!showVideo) {
+                val avatarColor =
+                    try {
+                        Color(android.graphics.Color.parseColor(participant.color))
+                    } catch (_: IllegalArgumentException) {
+                        Color(0xFF9E9E9E)
+                    }
+                val sprite =
+                    participant.character?.let { id ->
+                        com.example.syncle.data.ProfileStore.CHARACTERS.firstOrNull { it.id == id }?.sprite
+                    }
                 Box(
                     modifier =
                         Modifier
                             .size(48.dp)
                             .clip(CircleShape)
-                            .background(if (participant.isLocal) Color(0xFF00E5FF) else Color(0xFF9E9E9E)),
+                            .background(avatarColor.copy(alpha = 0.35f)),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = participant.displayName.take(1).uppercase(),
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                    )
+                    if (sprite != null) {
+                        com.example.syncle.ui.PixelSpriteView(
+                            sprite = sprite,
+                            primary = avatarColor,
+                            modifier = Modifier.size(42.dp),
+                        )
+                    } else {
+                        Text(
+                            text = participant.displayName.take(1).uppercase(),
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                        )
+                    }
                 }
             } else {
                 Spacer(modifier = Modifier.height(48.dp))
@@ -249,6 +271,8 @@ fun buildMeetingParticipants(
     localCameraEnabled: Boolean,
     localVideoTrack: VideoTrack?,
     tablePeers: List<RemotePeer>,
+    localColor: String = "#00E5FF",
+    localCharacter: String? = null,
 ): List<MeetingParticipant> {
     val localId = localIdentity ?: "local"
     val list =
@@ -261,6 +285,8 @@ fun buildMeetingParticipants(
                 isMicMuted = !localMicEnabled,
                 hasVideo = localCameraEnabled && localVideoTrack != null,
                 videoTrack = if (localCameraEnabled) localVideoTrack else null,
+                color = localColor,
+                character = localCharacter,
             ),
         )
     tablePeers.forEach { peer ->
@@ -273,6 +299,8 @@ fun buildMeetingParticipants(
                 isMicMuted = peer.status == com.example.syncle.domain.UserStatus.QUIET_MODE,
                 hasVideo = peer.videoTrack != null,
                 videoTrack = peer.videoTrack,
+                color = peer.color,
+                character = peer.character,
             ),
         )
     }

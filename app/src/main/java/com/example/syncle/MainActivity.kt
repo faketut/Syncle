@@ -185,11 +185,11 @@ fun SyncleApp(viewModel: SyncleViewModel) {
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                Text("Accent color", style = MaterialTheme.typography.labelMedium)
+                Text("Character", style = MaterialTheme.typography.labelMedium)
                 Spacer(modifier = Modifier.height(4.dp))
-                ColorPaletteRow(
-                    selected = connection.color,
-                    onSelect = { viewModel.setColor(it) },
+                CharacterPickerRow(
+                    selectedId = connection.character,
+                    onSelect = { viewModel.setCharacter(it) },
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -257,31 +257,36 @@ fun SyncleApp(viewModel: SyncleViewModel) {
 }
 
 /**
- * #46: tappable color swatches drawn from [ProfileStore.PALETTE]. Selected
- * swatch is outlined; tap publishes the choice into UI state.
+ * Tappable row of pixel-art characters (see [ProfileStore.CHARACTERS]). Each
+ * tile shows the sprite tinted with that character's primary color; selecting
+ * one publishes the choice into UI state and replaces the prior accent-color
+ * picker.
  */
 @Composable
-private fun ColorPaletteRow(
-    selected: String,
+private fun CharacterPickerRow(
+    selectedId: String,
     onSelect: (String) -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        ProfileStore.PALETTE.forEach { hex ->
-            val color =
+        com.example.syncle.data.ProfileStore.CHARACTERS.forEach { ch ->
+            val isSelected = ch.id == selectedId
+            val swatch =
                 try {
-                    androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex))
+                    androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(ch.color))
                 } catch (_: IllegalArgumentException) {
                     MaterialTheme.colorScheme.primary
                 }
-            val isSelected = hex.equals(selected, ignoreCase = true)
             androidx.compose.foundation.layout.Box(
                 modifier =
                     Modifier
-                        .size(32.dp)
-                        .background(color, shape = androidx.compose.foundation.shape.CircleShape)
+                        .size(48.dp)
+                        .background(
+                            color = swatch.copy(alpha = 0.18f),
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
+                        )
                         .border(
                             width = if (isSelected) 3.dp else 1.dp,
                             color =
@@ -290,10 +295,17 @@ private fun ColorPaletteRow(
                                 } else {
                                     MaterialTheme.colorScheme.outline
                                 },
-                            shape = androidx.compose.foundation.shape.CircleShape,
+                            shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp),
                         )
-                        .clickable { onSelect(hex) },
-            )
+                        .clickable { onSelect(ch.id) },
+                contentAlignment = androidx.compose.ui.Alignment.Center,
+            ) {
+                com.example.syncle.ui.PixelSpriteView(
+                    sprite = ch.sprite,
+                    primary = swatch,
+                    modifier = Modifier.size(40.dp),
+                )
+            }
         }
     }
 }

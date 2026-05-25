@@ -40,6 +40,8 @@ data class ConnectionUi(
     val nicknameError: String? = null,
     /** Selected accent color as a hex string ("#RRGGBB"). */
     val color: String = "#4F8EF7",
+    /** Selected pixel-art character id (see ProfileStore.CHARACTERS). */
+    val character: String = "knight",
     /** Current reconnect attempt counter; 0 when not in RECONNECTING state. */
     val reconnectAttempt: Int = 0,
 )

@@ -19,6 +19,9 @@ class RemotePeer(
     /** Accent color from backend / LiveKit attribute (e.g. "#4F8EF7"). */
     var color by mutableStateOf(initialColor)
 
+    /** Pixel-art character id from LiveKit attribute. Null until first publish. */
+    var character by mutableStateOf<String?>(null)
+
     // position is the "smoothed" position used for rendering
     var position by mutableStateOf(initialPosition)
 
