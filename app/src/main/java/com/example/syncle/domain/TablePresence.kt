@@ -50,7 +50,15 @@ object TablePresence {
         position: Offset,
         mapConfig: MapConfig,
     ): String? {
-        val declared = declaredTableId?.takeIf { it.isNotEmpty() }
-        return declared ?: nearestTableId(position, mapConfig)
+        // Tri-state semantics on [declaredTableId]:
+        //   null  -> we've never received a table attribute for this peer;
+        //            fall back to proximity so they still show at the table.
+        //   ""    -> peer explicitly told us they are NOT in any meeting
+        //            (e.g. just left). Honor that — do not fall back to
+        //            position, otherwise a peer who has not yet walked away
+        //            from the table still counts as a participant.
+        //   else  -> peer is in the named table.
+        if (declaredTableId == null) return nearestTableId(position, mapConfig)
+        return declaredTableId.takeIf { it.isNotEmpty() }
     }
 }

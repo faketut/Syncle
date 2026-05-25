@@ -90,6 +90,7 @@ fun SyncleScreen(
                 room = liveKitRoom,
                 localAvatar = avatarState,
                 remotePeers = remotePeers,
+                mapConfig = mapConfig,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {

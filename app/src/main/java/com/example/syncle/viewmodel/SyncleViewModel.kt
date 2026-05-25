@@ -483,6 +483,10 @@ class SyncleViewModel : ViewModel() {
     }
 
     fun onMove(delta: Offset) {
+        // While the local user is in a table meeting, they should be anchored
+        // to that table — taps that translate to movement are ignored until
+        // they explicitly leave the meeting.
+        if (meeting.activeTableMeetingId != null) return
         val cache = mapCache ?: return
         val previousNearby = avatarState.nearbyItemId
         avatarState.move(delta, cache)
@@ -692,7 +696,10 @@ class SyncleViewModel : ViewModel() {
             }
         }
         if (attributes.containsKey(TablePresence.ATTR_TABLE_ID)) {
-            val tableId = attributes[TablePresence.ATTR_TABLE_ID]?.takeIf { it.isNotEmpty() }
+            // Preserve the tri-state distinction: empty string means "explicitly
+            // not in a meeting" (peer just left); never-declared stays null so
+            // proximity fallback can still bind nearby peers to a table.
+            val tableId = attributes[TablePresence.ATTR_TABLE_ID] ?: ""
             if (peer.tableMeetingId != tableId) {
                 peer.tableMeetingId = tableId
                 changed = true

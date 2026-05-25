@@ -17,7 +17,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.syncle.domain.AvatarState
+import com.example.syncle.domain.MapConfig
 import com.example.syncle.domain.RemotePeer
+import com.example.syncle.domain.TablePresence
 import com.example.syncle.ui.livekit.SyncleVideoRenderer
 import io.livekit.android.room.Room
 
@@ -26,6 +28,7 @@ fun PeerVideoOverlay(
     room: Room?,
     localAvatar: AvatarState,
     remotePeers: List<RemotePeer>,
+    mapConfig: MapConfig,
     modifier: Modifier = Modifier,
 ) {
     val proximityThreshold = 300f
@@ -37,12 +40,19 @@ fun PeerVideoOverlay(
         derivedStateOf {
             val origin = localAvatar.position
             remotePeers.filter { peer ->
-                // Table meetings are private: a peer publishing inside a table
-                // must only be visible to other participants at the same table,
-                // never via the proximity walk-by preview. This overlay only
-                // renders when the local user is NOT in a meeting (see
-                // SyncleScreen), so any peer in a table is off-limits here.
-                peer.tableMeetingId.isNullOrBlank() &&
+                // Table meetings are private: a peer at a table (either by
+                // explicit attribute or by proximity fallback) must only be
+                // visible to other participants at the same table, never via
+                // the walk-by preview. This overlay only renders when the
+                // local user is NOT in a meeting (see SyncleScreen), so any
+                // peer in any table is off-limits here.
+                val peerTable =
+                    TablePresence.effectiveTableMeetingId(
+                        peer.tableMeetingId,
+                        peer.position,
+                        mapConfig,
+                    )
+                peerTable == null &&
                     (origin - peer.position).getDistance() < proximityThreshold &&
                     peer.videoTrack != null
             }
