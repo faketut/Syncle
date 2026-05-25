@@ -87,6 +87,7 @@ fun SyncleScreen(
 
         if (uiState.connection.status == ConnectionStatus.RECONNECTING) {
             ReconnectBanner(
+                attempt = uiState.connection.reconnectAttempt,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .fillMaxWidth()
@@ -96,14 +97,15 @@ fun SyncleScreen(
 }
 
 @Composable
-private fun ReconnectBanner(modifier: Modifier = Modifier) {
+private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
+    val label = if (attempt > 0) "Reconnecting… (attempt $attempt)" else "Reconnecting…"
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.errorContainer,
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
     ) {
         Text(
-            text = "Reconnecting…",
+            text = label,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
