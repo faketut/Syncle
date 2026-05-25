@@ -21,7 +21,7 @@ class RemotePeer(
 
     // position is the "smoothed" position used for rendering
     var position by mutableStateOf(initialPosition)
-    
+
     // targetPosition is the latest position received from the network
     var targetPosition by mutableStateOf(initialPosition)
 
@@ -57,5 +57,7 @@ class RemotePeer(
 }
 
 enum class UserStatus {
-    AVAILABLE, BUSY, QUIET_MODE
+    AVAILABLE,
+    BUSY,
+    QUIET_MODE,
 }

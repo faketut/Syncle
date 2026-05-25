@@ -26,7 +26,7 @@ fun PeerVideoOverlay(
     room: Room?,
     localAvatar: AvatarState,
     remotePeers: List<RemotePeer>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     val proximityThreshold = 300f
     // No remember key: read all inputs (localAvatar.position, the peer list,
@@ -48,7 +48,7 @@ fun PeerVideoOverlay(
     Box(modifier = modifier.fillMaxSize().padding(16.dp)) {
         LazyRow(
             modifier = Modifier.align(Alignment.TopEnd),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(nearbyPeers, key = { it.id }) { peer ->
                 VideoBox(room = room, peer = peer)
@@ -58,26 +58,30 @@ fun PeerVideoOverlay(
 }
 
 @Composable
-fun VideoBox(room: Room, peer: RemotePeer) {
+fun VideoBox(
+    room: Room,
+    peer: RemotePeer,
+) {
     Box(
-        modifier = Modifier
-            .size(width = 120.dp, height = 160.dp)
-            .background(Color.DarkGray, RoundedCornerShape(8.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
-        contentAlignment = Alignment.BottomCenter
+        modifier =
+            Modifier
+                .size(width = 120.dp, height = 160.dp)
+                .background(Color.DarkGray, RoundedCornerShape(8.dp))
+                .border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(8.dp)),
+        contentAlignment = Alignment.BottomCenter,
     ) {
         peer.videoTrack?.let { track ->
             SyncleVideoRenderer(
                 room = room,
                 videoTrack = track,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
         Text(
             text = peer.displayName,
             color = Color.White,
             fontSize = 10.sp,
-            modifier = Modifier.padding(4.dp).background(Color.Black.copy(alpha = 0.5f))
+            modifier = Modifier.padding(4.dp).background(Color.Black.copy(alpha = 0.5f)),
         )
     }
 }

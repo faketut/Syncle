@@ -25,13 +25,14 @@ data class MapBackground(
 @Composable
 fun rememberMapBackground(assetFileName: String): MapBackground? {
     val context = LocalContext.current
-    val maxPixelDim = remember {
-        val dm = context.resources.displayMetrics
-        // Cap output to ~2x the larger screen dimension. MapCamera scale is
-        // typically <= 2 so this keeps sampling crisp without OOMing on
-        // entry-level devices when room1.jpg is 4k+.
-        maxOf(dm.widthPixels, dm.heightPixels) * 2
-    }
+    val maxPixelDim =
+        remember {
+            val dm = context.resources.displayMetrics
+            // Cap output to ~2x the larger screen dimension. MapCamera scale is
+            // typically <= 2 so this keeps sampling crisp without OOMing on
+            // entry-level devices when room1.jpg is 4k+.
+            maxOf(dm.widthPixels, dm.heightPixels) * 2
+        }
     return remember(assetFileName, maxPixelDim) {
         decodeAssetBackground(context, assetFileName, maxPixelDim)
     }
@@ -49,20 +50,23 @@ private fun decodeAssetBackground(
         val logicalH = bounds.outHeight
         if (logicalW <= 0 || logicalH <= 0) return null
 
-        val opts = BitmapFactory.Options().apply {
-            inSampleSize = computeInSampleSize(logicalW, logicalH, maxPixelDim)
-            // Most room blueprints are opaque JPEGs; RGB_565 halves memory
-            // with no visible loss. If the asset advertises alpha, the decoder
-            // will already pick a config that preserves it.
-            inPreferredConfig = if (bounds.outMimeType == "image/png" || bounds.outMimeType == "image/webp") {
-                Bitmap.Config.ARGB_8888
-            } else {
-                Bitmap.Config.RGB_565
+        val opts =
+            BitmapFactory.Options().apply {
+                inSampleSize = computeInSampleSize(logicalW, logicalH, maxPixelDim)
+                // Most room blueprints are opaque JPEGs; RGB_565 halves memory
+                // with no visible loss. If the asset advertises alpha, the decoder
+                // will already pick a config that preserves it.
+                inPreferredConfig =
+                    if (bounds.outMimeType == "image/png" || bounds.outMimeType == "image/webp") {
+                        Bitmap.Config.ARGB_8888
+                    } else {
+                        Bitmap.Config.RGB_565
+                    }
             }
-        }
-        val bitmap = context.assets.open(assetFileName).use {
-            BitmapFactory.decodeStream(it, null, opts)
-        } ?: return null
+        val bitmap =
+            context.assets.open(assetFileName).use {
+                BitmapFactory.decodeStream(it, null, opts)
+            } ?: return null
         MapBackground(
             image = bitmap.asImageBitmap(),
             logicalSize = Size(logicalW.toFloat(), logicalH.toFloat()),
@@ -72,7 +76,11 @@ private fun decodeAssetBackground(
     }
 }
 
-private fun computeInSampleSize(srcW: Int, srcH: Int, maxDim: Int): Int {
+private fun computeInSampleSize(
+    srcW: Int,
+    srcH: Int,
+    maxDim: Int,
+): Int {
     if (maxDim <= 0) return 1
     var sample = 1
     var w = srcW
@@ -87,5 +95,4 @@ private fun computeInSampleSize(srcW: Int, srcH: Int, maxDim: Int): Int {
 
 /** Backwards-compatible accessor for call sites that only need the ImageBitmap. */
 @Composable
-fun rememberMapBackgroundImage(assetFileName: String): ImageBitmap? =
-    rememberMapBackground(assetFileName)?.image
+fun rememberMapBackgroundImage(assetFileName: String): ImageBitmap? = rememberMapBackground(assetFileName)?.image

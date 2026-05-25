@@ -13,7 +13,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -36,14 +35,15 @@ fun SyncleScreen(
     onToggleMic: () -> Unit,
     onToggleCamera: () -> Unit,
     onLeaveMeeting: () -> Unit,
-    liveKitRoom: Room? = null
+    liveKitRoom: Room? = null,
 ) {
     val meeting = uiState.meeting
     val activeTableId = meeting.activeTableId
     val backgroundImage = rememberMapBackground(mapConfig.backgroundImage)
-    val logicWorldSize = remember(mapConfig, backgroundImage) {
-        backgroundImage?.logicalSize ?: mapConfig.mapDrawSize
-    }
+    val logicWorldSize =
+        remember(mapConfig, backgroundImage) {
+            backgroundImage?.logicalSize ?: mapConfig.mapDrawSize
+        }
 
     Box(modifier = Modifier.fillMaxSize()) {
         SpatialCanvas(
@@ -54,7 +54,7 @@ fun SyncleScreen(
             remotePeers = remotePeers,
             onMove = onMove,
             onJoinRoom = onJoinTableMeeting,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
 
         if (activeTableId == null) {
@@ -62,13 +62,14 @@ fun SyncleScreen(
                 room = liveKitRoom,
                 localAvatar = avatarState,
                 remotePeers = remotePeers,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         } else {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.35f))
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.35f)),
             )
             TableMeetingOverlay(
                 tableTitle = meeting.tableTitle ?: activeTableId,
@@ -79,25 +80,30 @@ fun SyncleScreen(
                 onToggleMic = onToggleMic,
                 onToggleCamera = onToggleCamera,
                 onLeave = onLeaveMeeting,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth(),
             )
         }
 
         if (uiState.connection.status == ConnectionStatus.RECONNECTING) {
             ReconnectBanner(
                 attempt = uiState.connection.reconnectAttempt,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .fillMaxWidth()
+                modifier =
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth(),
             )
         }
     }
 }
 
 @Composable
-private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
+private fun ReconnectBanner(
+    attempt: Int,
+    modifier: Modifier = Modifier,
+) {
     val label = if (attempt > 0) "Reconnecting… (attempt $attempt)" else "Reconnecting…"
     Surface(
         modifier = modifier,
@@ -106,9 +112,10 @@ private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
     ) {
         Text(
             text = label,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(12.dp),
             style = MaterialTheme.typography.labelLarge,
         )
     }
@@ -117,7 +124,7 @@ private fun ReconnectBanner(attempt: Int, modifier: Modifier = Modifier) {
 @Composable
 fun SyncleScreenHost(
     mapConfig: MapConfig,
-    viewModel: SyncleViewModel
+    viewModel: SyncleViewModel,
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     SyncleScreen(
@@ -130,6 +137,6 @@ fun SyncleScreenHost(
         onToggleMic = { viewModel.toggleMeetingMic() },
         onToggleCamera = { viewModel.toggleMeetingCamera() },
         onLeaveMeeting = { viewModel.leaveTableMeeting() },
-        liveKitRoom = viewModel.getLiveKitRoom()
+        liveKitRoom = viewModel.getLiveKitRoom(),
     )
 }

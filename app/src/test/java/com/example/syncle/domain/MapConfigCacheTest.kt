@@ -2,22 +2,19 @@ package com.example.syncle.domain
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import com.example.syncle.domain.CollisionSettings
-import com.example.syncle.domain.InteractableItem
-import com.example.syncle.domain.MapConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MapConfigCacheTest {
-
-    private val map = MapConfig(
-        mapName = "test",
-        backgroundImage = "bg",
-        walkableAreas = listOf(Rect(0f, 0f, 500f, 500f)),
-        tables = listOf(InteractableItem("t1", Rect(100f, 100f, 120f, 110f))),
-        collisionSettings = CollisionSettings("AABB", true)
-    )
+    private val map =
+        MapConfig(
+            mapName = "test",
+            backgroundImage = "bg",
+            walkableAreas = listOf(Rect(0f, 0f, 500f, 500f)),
+            tables = listOf(InteractableItem("t1", Rect(100f, 100f, 120f, 110f))),
+            collisionSettings = CollisionSettings("AABB", true),
+        )
 
     @Test
     fun nearestTableId_usesCacheWithinEpsilon() {

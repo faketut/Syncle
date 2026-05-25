@@ -5,7 +5,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReconnectPolicyTest {
-
     @Test
     fun `delay grows roughly exponentially for early attempts`() {
         // random=0.5 -> jitter term = 0 -> exact base

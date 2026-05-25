@@ -12,7 +12,7 @@ data class MapConfig(
     val collisionSettings: CollisionSettings,
     val tablesById: Map<String, InteractableItem> = tables.associateBy { it.id },
     val mapBounds: Rect = computeMapBounds(walkableAreas),
-    val mapDrawSize: Size = Size(mapBounds.width.coerceAtLeast(1f), mapBounds.height.coerceAtLeast(1f))
+    val mapDrawSize: Size = Size(mapBounds.width.coerceAtLeast(1f), mapBounds.height.coerceAtLeast(1f)),
 ) {
     fun nearestTableId(position: Offset): String? {
         return tables
@@ -47,10 +47,10 @@ data class MapConfig(
 data class InteractableItem(
     val id: String,
     val rect: Rect,
-    val displayName: String = id
+    val displayName: String = id,
 )
 
 data class CollisionSettings(
     val type: String,
-    val strictMode: Boolean
+    val strictMode: Boolean,
 )

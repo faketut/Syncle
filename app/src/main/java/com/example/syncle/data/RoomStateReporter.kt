@@ -31,37 +31,41 @@ class RoomStateReporter(
         token: String,
         tableId: String?,
         position: Offset,
-    ): Boolean = withContext(Dispatchers.IO) {
-        val base = backendUrl.trim().trimEnd('/').ifEmpty { return@withContext false }
-        val body = JSONObject().apply {
-            put("userId", userId)
-            if (tableId != null) put("tableId", tableId) else put("tableId", JSONObject.NULL)
-            put("x", position.x.toDouble())
-            put("y", position.y.toDouble())
-        }
-        val request = Request.Builder()
-            .url("$base/v1/rooms/$room/state")
-            .header("Authorization", "Bearer $token")
-            .post(body.toString().toRequestBody(JSON))
-            .build()
-        try {
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    SyncleLog.w("state report http=${response.code}")
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            val base = backendUrl.trim().trimEnd('/').ifEmpty { return@withContext false }
+            val body =
+                JSONObject().apply {
+                    put("userId", userId)
+                    if (tableId != null) put("tableId", tableId) else put("tableId", JSONObject.NULL)
+                    put("x", position.x.toDouble())
+                    put("y", position.y.toDouble())
                 }
-                response.isSuccessful
+            val request =
+                Request.Builder()
+                    .url("$base/v1/rooms/$room/state")
+                    .header("Authorization", "Bearer $token")
+                    .post(body.toString().toRequestBody(JSON))
+                    .build()
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        SyncleLog.w("state report http=${response.code}")
+                    }
+                    response.isSuccessful
+                }
+            } catch (e: Exception) {
+                SyncleLog.e("state report failed", e)
+                false
             }
-        } catch (e: Exception) {
-            SyncleLog.e("state report failed", e)
-            false
         }
-    }
 
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
-        val defaultClient: OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(5, TimeUnit.SECONDS)
-            .readTimeout(5, TimeUnit.SECONDS)
-            .build()
+        val defaultClient: OkHttpClient =
+            OkHttpClient.Builder()
+                .connectTimeout(5, TimeUnit.SECONDS)
+                .readTimeout(5, TimeUnit.SECONDS)
+                .build()
     }
 }

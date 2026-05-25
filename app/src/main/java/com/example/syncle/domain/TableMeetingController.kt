@@ -1,17 +1,13 @@
 package com.example.syncle.domain
 
-import com.example.syncle.domain.AvatarState
 import com.example.syncle.data.LiveKitService
-import com.example.syncle.domain.MapConfig
-import com.example.syncle.domain.RemotePeer
-import com.example.syncle.domain.TablePresence
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class TableMeetingController(
     private val avatarState: AvatarState,
-    private val liveKit: () -> LiveKitService?
+    private val liveKit: () -> LiveKitService?,
 ) {
     private val _activeTableIdFlow = MutableStateFlow<String?>(null)
     val activeTableIdFlow: StateFlow<String?> = _activeTableIdFlow.asStateFlow()
@@ -59,11 +55,18 @@ class TableMeetingController(
         if (atTable != active) leave()
     }
 
-    fun tableDisplayName(tableId: String, mapConfig: MapConfig): String {
+    fun tableDisplayName(
+        tableId: String,
+        mapConfig: MapConfig,
+    ): String {
         return mapConfig.tablesById[tableId]?.displayName ?: tableId
     }
 
-    fun peersAtTable(tableId: String, mapConfig: MapConfig, allPeers: List<RemotePeer>): List<RemotePeer> {
+    fun peersAtTable(
+        tableId: String,
+        mapConfig: MapConfig,
+        allPeers: List<RemotePeer>,
+    ): List<RemotePeer> {
         return allPeers.filter { peer ->
             TablePresence.effectiveTableMeetingId(peer.tableMeetingId, peer.position, mapConfig) == tableId
         }

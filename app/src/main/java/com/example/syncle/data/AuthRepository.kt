@@ -36,56 +36,61 @@ class AuthRepository(
         nickname: String,
         color: String,
         room: String,
-    ): ConnectionDetails? = withContext(Dispatchers.IO) {
-        val base = backendUrl.trim().ifEmpty {
-            SyncleLog.w("SYNCLE_BACKEND_URL is empty. Set syncle.backend_url in local.properties.")
-            return@withContext null
-        }
-        val sessionsUrl = base.trimEnd('/') + "/v1/sessions"
-        if (sessionsUrl.toHttpUrlOrNull() == null) {
-            SyncleLog.w("SYNCLE_BACKEND_URL is not a valid URL: $base")
-            return@withContext null
-        }
-
-        val body = JSONObject().apply {
-            put("deviceId", deviceId)
-            put("nickname", nickname)
-            put("color", color)
-            put("room", room)
-        }
-        val request = Request.Builder()
-            .url(sessionsUrl)
-            .post(body.toString().toRequestBody(JSON))
-            .build()
-
-        try {
-            client.newCall(request).execute().use { response ->
-                val payload = response.body?.string()
-                if (!response.isSuccessful || payload.isNullOrEmpty()) {
-                    SyncleLog.w("fetchSession failed http=${response.code} body=${payload ?: "<empty>"}")
+    ): ConnectionDetails? =
+        withContext(Dispatchers.IO) {
+            val base =
+                backendUrl.trim().ifEmpty {
+                    SyncleLog.w("SYNCLE_BACKEND_URL is empty. Set syncle.backend_url in local.properties.")
                     return@withContext null
                 }
-                val json = JSONObject(payload)
-                ConnectionDetails(
-                    serverUrl = json.getString("serverUrl"),
-                    token = json.getString("token"),
-                    userId = json.getString("userId"),
-                    nickname = json.optString("nickname", nickname),
-                    color = json.optString("color", color),
-                    expiresAt = json.optLong("expiresAt", 0L),
-                )
+            val sessionsUrl = base.trimEnd('/') + "/v1/sessions"
+            if (sessionsUrl.toHttpUrlOrNull() == null) {
+                SyncleLog.w("SYNCLE_BACKEND_URL is not a valid URL: $base")
+                return@withContext null
             }
-        } catch (e: Exception) {
-            SyncleLog.e("fetchSession failed", e)
-            null
+
+            val body =
+                JSONObject().apply {
+                    put("deviceId", deviceId)
+                    put("nickname", nickname)
+                    put("color", color)
+                    put("room", room)
+                }
+            val request =
+                Request.Builder()
+                    .url(sessionsUrl)
+                    .post(body.toString().toRequestBody(JSON))
+                    .build()
+
+            try {
+                client.newCall(request).execute().use { response ->
+                    val payload = response.body?.string()
+                    if (!response.isSuccessful || payload.isNullOrEmpty()) {
+                        SyncleLog.w("fetchSession failed http=${response.code} body=${payload ?: "<empty>"}")
+                        return@withContext null
+                    }
+                    val json = JSONObject(payload)
+                    ConnectionDetails(
+                        serverUrl = json.getString("serverUrl"),
+                        token = json.getString("token"),
+                        userId = json.getString("userId"),
+                        nickname = json.optString("nickname", nickname),
+                        color = json.optString("color", color),
+                        expiresAt = json.optLong("expiresAt", 0L),
+                    )
+                }
+            } catch (e: Exception) {
+                SyncleLog.e("fetchSession failed", e)
+                null
+            }
         }
-    }
 
     private companion object {
         val JSON = "application/json; charset=utf-8".toMediaType()
-        val defaultClient: OkHttpClient = OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .build()
+        val defaultClient: OkHttpClient =
+            OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.SECONDS)
+                .build()
     }
 }

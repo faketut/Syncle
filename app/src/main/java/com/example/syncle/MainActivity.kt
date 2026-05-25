@@ -2,8 +2,8 @@ package com.example.syncle
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -20,16 +20,16 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
-import kotlin.OptIn
 import com.example.syncle.data.MapRepository
 import com.example.syncle.data.ProfileStore
 import com.example.syncle.domain.SyncleLog
+import com.example.syncle.ui.SyncleScreenHost
 import com.example.syncle.ui.state.*
 import com.example.syncle.viewmodel.SyncleViewModel
-import com.example.syncle.ui.SyncleScreenHost
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.OptIn
 
 class MainActivity : ComponentActivity() {
     private val viewModel: SyncleViewModel by viewModels()
@@ -38,12 +38,13 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         lifecycleScope.launch {
-            val result = withContext(Dispatchers.IO) {
-                runCatching {
-                    val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
-                    MapRepository().parseJsonConfig(jsonString)
+            val result =
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        val jsonString = assets.open("map_config.json").bufferedReader().use { it.readText() }
+                        MapRepository().parseJsonConfig(jsonString)
+                    }
                 }
-            }
             result.onSuccess { config -> viewModel.setMapConfig(config) }
                 .onFailure { e ->
                     SyncleLog.e("loadMapConfig failed", e)
@@ -55,7 +56,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
+                    color = MaterialTheme.colorScheme.background,
                 ) {
                     SyncleApp(viewModel)
                 }
@@ -74,26 +75,28 @@ fun SyncleApp(viewModel: SyncleViewModel) {
     var permissionsGranted by remember { mutableStateOf(false) }
     var permissionCheckDone by remember { mutableStateOf(false) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestMultiplePermissions(),
-        onResult = { permissions ->
-            val audioGranted = permissions[android.Manifest.permission.RECORD_AUDIO] ?: false
-            val cameraGranted = permissions[android.Manifest.permission.CAMERA] ?: false
-            permissionsGranted = audioGranted && cameraGranted
-            permissionCheckDone = true
-        }
-    )
+    val permissionLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestMultiplePermissions(),
+            onResult = { permissions ->
+                val audioGranted = permissions[android.Manifest.permission.RECORD_AUDIO] ?: false
+                val cameraGranted = permissions[android.Manifest.permission.CAMERA] ?: false
+                permissionsGranted = audioGranted && cameraGranted
+                permissionCheckDone = true
+            },
+        )
 
     LaunchedEffect(Unit) {
         val audioCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO)
         val cameraCheck = ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA)
         if (audioCheck == android.content.pm.PackageManager.PERMISSION_GRANTED &&
-            cameraCheck == android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            cameraCheck == android.content.pm.PackageManager.PERMISSION_GRANTED
+        ) {
             permissionsGranted = true
             permissionCheckDone = true
         } else {
             permissionLauncher.launch(
-                arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+                arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA),
             )
         }
     }
@@ -109,17 +112,17 @@ fun SyncleApp(viewModel: SyncleViewModel) {
         Column(
             modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = stringResource(R.string.permission_rationale),
                 style = MaterialTheme.typography.bodyLarge,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
             Spacer(modifier = Modifier.height(16.dp))
             Button(onClick = {
                 permissionLauncher.launch(
-                    arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA)
+                    arrayOf(android.Manifest.permission.RECORD_AUDIO, android.Manifest.permission.CAMERA),
                 )
             }) {
                 Text(stringResource(R.string.permission_grant))
@@ -148,18 +151,20 @@ fun SyncleApp(viewModel: SyncleViewModel) {
     }
 
     if (connection.status != ConnectionStatus.CONNECTED &&
-        connection.status != ConnectionStatus.RECONNECTING) {
+        connection.status != ConnectionStatus.RECONNECTING
+    ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(24.dp),
             verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Text(
                 text = "Syncle - Spatial Workstream",
                 style = MaterialTheme.typography.headlineMedium,
-                modifier = Modifier.padding(bottom = 32.dp)
+                modifier = Modifier.padding(bottom = 32.dp),
             )
 
             if (connection.status == ConnectionStatus.CONNECTING || connection.isAutoFetching) {
@@ -175,7 +180,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                         connection.nicknameError?.let { Text(it) }
                     },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -184,7 +189,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                 Spacer(modifier = Modifier.height(4.dp))
                 ColorPaletteRow(
                     selected = connection.color,
-                    onSelect = { viewModel.setColor(it) }
+                    onSelect = { viewModel.setColor(it) },
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -198,7 +203,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                         connection.roomError?.let { Text(it) }
                     },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -207,7 +212,7 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                     value = connection.url,
                     onValueChange = { viewModel.setUrl(it) },
                     label = { Text("LiveKit Server URL") },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
 
                 Spacer(modifier = Modifier.height(16.dp))
@@ -217,15 +222,16 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                     onValueChange = { viewModel.setToken(it) },
                     label = { Text("Access Token") },
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Paste JWT Token here...") }
+                    placeholder = { Text("Paste JWT Token here...") },
                 )
 
                 if (connection.status == ConnectionStatus.ERROR) {
                     Text(
-                        text = connection.lastConnectError
-                            ?: "Connection failed. Check URL/token or server status.",
+                        text =
+                            connection.lastConnectError
+                                ?: "Connection failed. Check URL/token or server status.",
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 8.dp)
+                        modifier = Modifier.padding(top = 8.dp),
                     )
                 }
 
@@ -236,9 +242,10 @@ fun SyncleApp(viewModel: SyncleViewModel) {
                         if (connection.token.isNotEmpty()) viewModel.connect(context)
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp),
-                    enabled = connection.token.isNotEmpty() &&
-                        ProfileStore.isValidNickname(connection.nickname) &&
-                        ProfileStore.isValidRoom(connection.room.trim())
+                    enabled =
+                        connection.token.isNotEmpty() &&
+                            ProfileStore.isValidNickname(connection.nickname) &&
+                            ProfileStore.isValidRoom(connection.room.trim()),
                 ) {
                     Text("Join Room")
                 }
@@ -254,29 +261,38 @@ fun SyncleApp(viewModel: SyncleViewModel) {
  * swatch is outlined; tap publishes the choice into UI state.
  */
 @Composable
-private fun ColorPaletteRow(selected: String, onSelect: (String) -> Unit) {
+private fun ColorPaletteRow(
+    selected: String,
+    onSelect: (String) -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         ProfileStore.PALETTE.forEach { hex ->
-            val color = try {
-                androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex))
-            } catch (_: IllegalArgumentException) {
-                MaterialTheme.colorScheme.primary
-            }
+            val color =
+                try {
+                    androidx.compose.ui.graphics.Color(android.graphics.Color.parseColor(hex))
+                } catch (_: IllegalArgumentException) {
+                    MaterialTheme.colorScheme.primary
+                }
             val isSelected = hex.equals(selected, ignoreCase = true)
             androidx.compose.foundation.layout.Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .background(color, shape = androidx.compose.foundation.shape.CircleShape)
-                    .border(
-                        width = if (isSelected) 3.dp else 1.dp,
-                        color = if (isSelected) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.outline,
-                        shape = androidx.compose.foundation.shape.CircleShape
-                    )
-                    .clickable { onSelect(hex) }
+                modifier =
+                    Modifier
+                        .size(32.dp)
+                        .background(color, shape = androidx.compose.foundation.shape.CircleShape)
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color =
+                                if (isSelected) {
+                                    MaterialTheme.colorScheme.onSurface
+                                } else {
+                                    MaterialTheme.colorScheme.outline
+                                },
+                            shape = androidx.compose.foundation.shape.CircleShape,
+                        )
+                        .clickable { onSelect(hex) },
             )
         }
     }

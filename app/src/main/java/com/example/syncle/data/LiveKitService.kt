@@ -28,7 +28,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class LiveKitService(
-    private val context: Context
+    private val context: Context,
 ) {
     private var room: Room? = null
 
@@ -39,24 +39,29 @@ class LiveKitService(
     private val _events = MutableSharedFlow<LiveKitEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<LiveKitEvent> = _events.asSharedFlow()
 
-    suspend fun connect(url: String, token: String): LiveKitConnectResult {
+    suspend fun connect(
+        url: String,
+        token: String,
+    ): LiveKitConnectResult {
         return withContext(Dispatchers.IO) {
             val trimmedUrl = url.trim()
             val trimmedToken = token.trim()
             if (trimmedUrl.isEmpty() || trimmedToken.isEmpty()) {
                 return@withContext LiveKitConnectResult(
                     success = false,
-                    errorMessage = "Server URL or token is empty. Wait for sandbox fetch or paste a token."
+                    errorMessage = "Server URL or token is empty. Wait for sandbox fetch or paste a token.",
                 )
             }
             try {
-                val currentRoom = LiveKit.create(
-                    appContext = context.applicationContext,
-                    options = RoomOptions(
-                        adaptiveStream = true,
-                        dynacast = true,
+                val currentRoom =
+                    LiveKit.create(
+                        appContext = context.applicationContext,
+                        options =
+                            RoomOptions(
+                                adaptiveStream = true,
+                                dynacast = true,
+                            ),
                     )
-                )
                 room = currentRoom
                 val scope = CoroutineScope(Dispatchers.Main.immediate + SupervisorJob())
                 serviceScope = scope
@@ -87,13 +92,16 @@ class LiveKitService(
                 SyncleLog.e("LiveKit connect failed (url=$trimmedUrl)", e)
                 LiveKitConnectResult(
                     success = false,
-                    errorMessage = e.message ?: e.javaClass.simpleName
+                    errorMessage = e.message ?: e.javaClass.simpleName,
                 )
             }
         }
     }
 
-    private fun setupRoomListener(currentRoom: Room, scope: CoroutineScope) {
+    private fun setupRoomListener(
+        currentRoom: Room,
+        scope: CoroutineScope,
+    ) {
         scope.launch {
             currentRoom.events.collect { event ->
                 when (event) {
@@ -107,8 +115,8 @@ class LiveKitService(
                             LiveKitEvent.ParticipantConnected(
                                 identity,
                                 event.participant.name,
-                                event.participant.attributes
-                            )
+                                event.participant.attributes,
+                            ),
                         )
                     }
                     is io.livekit.android.events.RoomEvent.ParticipantDisconnected -> {
@@ -124,13 +132,15 @@ class LiveKitService(
                     }
                     is io.livekit.android.events.RoomEvent.TrackPublished -> {
                         if (event.participant === currentRoom.localParticipant &&
-                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
+                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO
+                        ) {
                             _events.tryEmit(LiveKitEvent.LocalVideoTrackChanged)
                         }
                     }
                     is io.livekit.android.events.RoomEvent.TrackUnpublished -> {
                         if (event.participant === currentRoom.localParticipant &&
-                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO) {
+                            event.publication.kind == io.livekit.android.room.track.Track.Kind.VIDEO
+                        ) {
                             _events.tryEmit(LiveKitEvent.LocalVideoTrackChanged)
                         }
                     }
@@ -145,7 +155,7 @@ class LiveKitService(
                     is io.livekit.android.events.RoomEvent.ParticipantAttributesChanged -> {
                         val identity = event.participant.identity?.value ?: return@collect
                         _events.tryEmit(
-                            LiveKitEvent.ParticipantAttributesChanged(identity, event.changedAttributes)
+                            LiveKitEvent.ParticipantAttributesChanged(identity, event.changedAttributes),
                         )
                     }
                     is io.livekit.android.events.RoomEvent.ConnectionQualityChanged -> {
@@ -175,7 +185,7 @@ class LiveKitService(
             try {
                 currentRoom.localParticipant.publishData(
                     data = data,
-                    reliability = DataPublishReliability.LOSSY
+                    reliability = DataPublishReliability.LOSSY,
                 )
             } catch (e: Exception) {
                 SyncleLog.e("publishPosition failed", e)
@@ -188,7 +198,7 @@ class LiveKitService(
         localAvatar: AvatarState,
         mapConfig: MapConfig,
         localAcousticTableId: String?,
-        audioEngine: SpatialAudioEngine
+        audioEngine: SpatialAudioEngine,
     ) {
         val currentRoom = room ?: return
         // #12: skip the per-call .associateBy { it.identity?.value } allocation
@@ -199,12 +209,13 @@ class LiveKitService(
         val remoteParticipants = currentRoom.remoteParticipants
 
         remotePeers.forEach { peer ->
-            val volume = audioEngine.calculateVolume(
-                localAvatar,
-                peer,
-                mapConfig,
-                localAcousticTableId
-            )
+            val volume =
+                audioEngine.calculateVolume(
+                    localAvatar,
+                    peer,
+                    mapConfig,
+                    localAcousticTableId,
+                )
             if (!audioEngine.shouldApplyVolume(peer.id, volume)) return@forEach
 
             val participant = remoteParticipants[Participant.Identity(peer.id)] ?: return@forEach
@@ -212,7 +223,10 @@ class LiveKitService(
         }
     }
 
-    private fun applyVolume(participant: Participant, volume: Float) {
+    private fun applyVolume(
+        participant: Participant,
+        volume: Float,
+    ) {
         participant.trackPublications.values.forEach { publication ->
             val audioTrack = publication.track as? RemoteAudioTrack ?: return@forEach
             audioTrack.setVolume(volume.toDouble())
