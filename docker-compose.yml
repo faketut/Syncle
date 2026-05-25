@@ -7,12 +7,21 @@ services:
       - "7881:7881"   # TCP fallback
       - "7882:7882/udp"
     restart: unless-stopped
+    healthcheck:
+      # `--dev` exposes /healthz on the signaling port; opening a TCP socket
+      # to 7880 is enough to confirm the SFU is accepting connections.
+      test: ["CMD-SHELL", "nc -z localhost 7880 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
 
   server:
     build:
       context: ./server
     depends_on:
-      - livekit
+      livekit:
+        condition: service_healthy
     environment:
       LIVEKIT_URL: ws://livekit:7880
       LIVEKIT_API_KEY: devkey
@@ -26,3 +35,9 @@ services:
     ports:
       - "8787:8787"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8787/healthz || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
