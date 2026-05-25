@@ -143,7 +143,8 @@ fun SyncleApp(viewModel: SyncleViewModel) {
         return
     }
 
-    if (connection.status != ConnectionStatus.CONNECTED) {
+    if (connection.status != ConnectionStatus.CONNECTED &&
+        connection.status != ConnectionStatus.RECONNECTING) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

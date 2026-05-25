@@ -11,7 +11,7 @@ import com.example.syncle.ui.MeetingParticipant
  */
 
 enum class ConnectionStatus {
-    CONNECTING, CONNECTED, DISCONNECTED, ERROR
+    CONNECTING, CONNECTED, RECONNECTING, DISCONNECTED, ERROR
 }
 
 data class LocalAvatarUi(
