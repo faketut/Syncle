@@ -80,6 +80,7 @@ fun SyncleScreen(
             remotePeers = remotePeers,
             onMove = onMove,
             onJoinRoom = onJoinTableMeeting,
+            localCharacter = uiState.connection.character,
             modifier = Modifier.fillMaxSize(),
         )
 
