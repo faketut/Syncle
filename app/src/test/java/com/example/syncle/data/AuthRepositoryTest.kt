@@ -63,14 +63,14 @@ class AuthRepositoryTest {
     fun `fetchSession returns null on http error`() = runTest {
         server.enqueue(MockResponse().setResponseCode(500).setBody("oops"))
         val repo = AuthRepository(server.url("/").toString(), OkHttpClient())
-        val details = repo.fetchSession("dev-2", "Bob", "#000")
+        val details = repo.fetchSession("dev-2", "Bob", "#000", room = "room-x")
         assertNull(details)
     }
 
     @Test
     fun `fetchSession returns null on empty backend url`() = runTest {
         val repo = AuthRepository(backendUrl = "", client = OkHttpClient())
-        val details = repo.fetchSession("dev-3", "Carol", "#111")
+        val details = repo.fetchSession("dev-3", "Carol", "#111", room = "room-x")
         assertNull(details)
     }
 }

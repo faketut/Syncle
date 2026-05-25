@@ -27,7 +27,7 @@ describe("POST /v1/sessions", () => {
     const r1 = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { deviceId: "device-abc-123", nickname: "Alice", room: "r1" },
+      payload: { deviceId: "device-abc-123", nickname: "Alice", room: "room1" },
     });
     expect(r1.statusCode).toBe(200);
     const j1 = r1.json();
@@ -38,7 +38,7 @@ describe("POST /v1/sessions", () => {
     const r2 = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { deviceId: "device-abc-123", nickname: "Alice2", room: "r1" },
+      payload: { deviceId: "device-abc-123", nickname: "Alice2", room: "room1" },
     });
     const j2 = r2.json();
     expect(j2.userId).toBe(j1.userId);
@@ -53,13 +53,39 @@ describe("POST /v1/sessions", () => {
     });
     expect(r.statusCode).toBe(400);
   });
+
+  // #40: room name must satisfy ^[a-z0-9-]{3,64}$ so it round-trips into the
+  // JWT video.room claim without surprises.
+  it.each([
+    ["ab", "too short"],
+    ["UPPER", "uppercase letters not allowed"],
+    ["bad room", "spaces not allowed"],
+    ["bad/slash", "slash not allowed"],
+    ["a".repeat(65), "longer than 64 chars"],
+  ])("rejects invalid room %p (%s)", async (room) => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { deviceId: "device-room-validation-1", nickname: "X", room },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  it("accepts well-formed custom room names", async () => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { deviceId: "device-room-ok-1", nickname: "X", room: "team-alpha-42" },
+    });
+    expect(r.statusCode).toBe(200);
+  });
 });
 
 describe("snapshot + state", () => {
   it("rejects state without bearer", async () => {
     const r = await app.inject({
       method: "POST",
-      url: "/v1/rooms/r1/state",
+      url: "/v1/rooms/room1/state",
       payload: { userId: "x", x: 0, y: 0 },
     });
     expect(r.statusCode).toBe(401);
@@ -69,19 +95,19 @@ describe("snapshot + state", () => {
     const session = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { deviceId: "device-snap-1", nickname: "Bob", room: "r2" },
+      payload: { deviceId: "device-snap-1", nickname: "Bob", room: "room2" },
     });
     const { userId, token } = session.json();
 
     const state = await app.inject({
       method: "POST",
-      url: "/v1/rooms/r2/state",
+      url: "/v1/rooms/room2/state",
       headers: { authorization: `Bearer ${token}` },
       payload: { userId, tableId: "t1", x: 300, y: 400 },
     });
     expect(state.statusCode).toBe(200);
 
-    const snap = await app.inject({ method: "GET", url: "/v1/rooms/r2/snapshot" });
+    const snap = await app.inject({ method: "GET", url: "/v1/rooms/room2/snapshot" });
     const peers = snap.json().peers;
     expect(peers).toHaveLength(1);
     expect(peers[0]).toMatchObject({ userId, nickname: "Bob", tableId: "t1", x: 300, y: 400 });
@@ -91,12 +117,12 @@ describe("snapshot + state", () => {
     const session = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { deviceId: "device-mismatch", nickname: "C", room: "r3" },
+      payload: { deviceId: "device-mismatch", nickname: "C", room: "room3" },
     });
     const { token } = session.json();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/rooms/r3/state",
+      url: "/v1/rooms/room3/state",
       headers: { authorization: `Bearer ${token}` },
       payload: { userId: "someone-else-1234", x: 0, y: 0 },
     });
@@ -107,12 +133,12 @@ describe("snapshot + state", () => {
     const session = await app.inject({
       method: "POST",
       url: "/v1/sessions",
-      payload: { deviceId: "device-room", nickname: "D", room: "r4" },
+      payload: { deviceId: "device-room", nickname: "D", room: "room4" },
     });
     const { userId, token } = session.json();
     const r = await app.inject({
       method: "POST",
-      url: "/v1/rooms/r4-wrong/state",
+      url: "/v1/rooms/room4-wrong/state",
       headers: { authorization: `Bearer ${token}` },
       payload: { userId, x: 0, y: 0 },
     });

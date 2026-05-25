@@ -30,6 +30,20 @@ class ProfileStore(context: Context) {
             .apply()
     }
 
+    /** Last room the user joined. Defaults to [DEFAULT_ROOM] for back-compat. */
+    fun getRoom(): String =
+        prefs.getString(KEY_ROOM, null)?.takeIf { isValidRoom(it) } ?: DEFAULT_ROOM
+
+    /**
+     * Persist the room iff it matches [ROOM_REGEX]. Returns true when stored,
+     * false when the input was rejected so callers can surface a validation error.
+     */
+    fun setRoom(room: String): Boolean {
+        if (!isValidRoom(room)) return false
+        prefs.edit().putString(KEY_ROOM, room).apply()
+        return true
+    }
+
     private fun defaultNickname(): String {
         val suffix = (1..4).map { ALPHABET.random() }.joinToString("")
         return "Syncle-$suffix"
@@ -37,12 +51,17 @@ class ProfileStore(context: Context) {
 
     private fun defaultColor(): String = COLORS.random()
 
-    private companion object {
-        const val PREFS = "syncle.profile"
-        const val KEY_NICK = "nickname"
-        const val KEY_COLOR = "color"
-        const val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
-        val COLORS = listOf(
+    companion object {
+        const val DEFAULT_ROOM = "syncle-office"
+        val ROOM_REGEX = Regex("^[a-z0-9-]{3,64}$")
+        fun isValidRoom(room: String): Boolean = ROOM_REGEX.matches(room)
+
+        private const val PREFS = "syncle.profile"
+        private const val KEY_NICK = "nickname"
+        private const val KEY_COLOR = "color"
+        private const val KEY_ROOM = "room"
+        private const val ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        private val COLORS = listOf(
             "#4F8EF7", "#F78E4F", "#7EC845", "#C8456F",
             "#9B59B6", "#1ABC9C", "#E67E22", "#34495E"
         )
