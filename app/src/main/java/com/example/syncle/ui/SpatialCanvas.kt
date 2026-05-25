@@ -36,6 +36,7 @@ fun SpatialCanvas(
     onMove: (Offset) -> Unit,
     onJoinRoom: (tableId: String) -> Unit = {},
     localCharacter: String? = null,
+    localColor: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val nearbyId = avatarState.nearbyItemId
@@ -106,12 +107,20 @@ fun SpatialCanvas(
                 viewport,
                 screenSize,
             )
-        val avatarRadiusPx = avatarState.radius * viewport.scale
+        val avatarRadiusPx = (avatarState.radius * viewport.scale).coerceAtLeast(10f)
         val localSprite = localCharacter?.let { ProfileStore.characterById(it).sprite }
+        val localFill =
+            localColor?.let {
+                try {
+                    Color(android.graphics.Color.parseColor(it))
+                } catch (_: IllegalArgumentException) {
+                    null
+                }
+            } ?: LocalAvatarColor
         drawAvatar(
             center = localScreen,
             radiusPx = avatarRadiusPx,
-            fillColor = LocalAvatarColor,
+            fillColor = localFill,
             showSpeakingHalo = avatarState.isSpeaking,
             sprite = localSprite,
         )
@@ -124,7 +133,9 @@ fun SpatialCanvas(
                 } catch (_: IllegalArgumentException) {
                     RemoteAvatarFallback
                 }
-            val peerSprite = peer.character?.let { ProfileStore.characterById(it).sprite }
+            val peerSprite =
+                peer.character?.let { ProfileStore.characterById(it).sprite }
+                    ?: ProfileStore.characterByColor(peer.color)?.sprite
             drawAvatar(
                 center = peerScreen,
                 radiusPx = avatarRadiusPx,

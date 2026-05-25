@@ -219,6 +219,7 @@ private fun MeetingParticipantTile(
                     participant.character?.let { id ->
                         com.example.syncle.data.ProfileStore.CHARACTERS.firstOrNull { it.id == id }?.sprite
                     }
+                        ?: com.example.syncle.data.ProfileStore.characterByColor(participant.color)?.sprite
                 Box(
                     modifier =
                         Modifier
