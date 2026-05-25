@@ -309,7 +309,11 @@ class SyncleViewModel : ViewModel() {
         val state = _uiState.value.connection
         val result = service.connect(state.url, state.token)
         if (result.success) {
-            updateConnection { it.copy(status = ConnectionStatus.CONNECTED, lastConnectError = null) }
+            updateConnection { it.copy(
+                status = ConnectionStatus.CONNECTED,
+                lastConnectError = null,
+                reconnectAttempt = 0,
+            ) }
             reconnectAttempt = 0
             publishLocalProfileAttribute()
             seedFromSnapshot()
@@ -355,7 +359,8 @@ class SyncleViewModel : ViewModel() {
         SyncleLog.d("Reconnect: attempt $attempt scheduled in ${delayMs}ms (reason=$reason)")
         updateConnection { it.copy(
             status = ConnectionStatus.RECONNECTING,
-            lastConnectError = reason
+            lastConnectError = reason,
+            reconnectAttempt = attempt,
         ) }
         reconnectJob = viewModelScope.launch {
             delay(delayMs)

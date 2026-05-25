@@ -142,6 +142,8 @@ gather/
 
 The backend signs LiveKit JWTs against a stable `userId` derived from the device's persisted UUID, so the same install keeps the same identity across restarts. See [server/README.md](server/README.md) for endpoint details.
 
+Shared contract values (room regex, nickname bounds, `/v1/sessions` payload) are documented in [docs/contracts.md](docs/contracts.md) — keep both client and server in sync when changing them.
+
 ---
 
 <a id="中文"></a>
@@ -212,6 +214,8 @@ gather/
 6. 可选：`./gradlew :app:testDebugUnitTest` 跑 Android 单测；`cd server && npm test` 跑后端单测。
 
 后端基于设备持久 UUID 签发绑定到稳定 `userId` 的 LiveKit JWT；同一设备多次启动保持同一身份。接口详情见 [server/README.md](server/README.md)。
+
+共享约定（房间名正则、昵称长度、`/v1/sessions` 报文格式）见 [docs/contracts.md](docs/contracts.md)，改动需同步客户端与服务端。
 
 ---
 
