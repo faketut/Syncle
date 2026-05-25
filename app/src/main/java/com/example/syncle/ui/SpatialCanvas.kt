@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import com.example.syncle.data.ProfileStore
 import com.example.syncle.domain.AvatarState
 import com.example.syncle.domain.MapConfig
 import com.example.syncle.domain.RemotePeer
@@ -20,6 +21,8 @@ import com.example.syncle.domain.TablePresence
 import kotlin.math.roundToInt
 
 private val LocalAvatarColor = Color(0xFF00E5FF)
+private val SpriteLight = Color(0xFFF9E8C9)
+private val SpriteDark = Color(0xFF1A1A22)
 private val RemoteAvatarFallback = Color(0xFF9E9E9E)
 private val SpeakingHalo = Color(0xFF4CAF50).copy(alpha = 0.45f)
 
@@ -32,6 +35,7 @@ fun SpatialCanvas(
     remotePeers: List<RemotePeer>,
     onMove: (Offset) -> Unit,
     onJoinRoom: (tableId: String) -> Unit = {},
+    localCharacter: String? = null,
     modifier: Modifier = Modifier,
 ) {
     val nearbyId = avatarState.nearbyItemId
@@ -102,11 +106,14 @@ fun SpatialCanvas(
                 viewport,
                 screenSize,
             )
-        drawAvatarDot(
+        val avatarRadiusPx = avatarState.radius * viewport.scale
+        val localSprite = localCharacter?.let { ProfileStore.characterById(it).sprite }
+        drawAvatar(
             center = localScreen,
-            radiusPx = avatarState.radius * viewport.scale,
+            radiusPx = avatarRadiusPx,
             fillColor = LocalAvatarColor,
             showSpeakingHalo = avatarState.isSpeaking,
+            sprite = localSprite,
         )
 
         remotePeers.forEach { peer ->
@@ -117,11 +124,13 @@ fun SpatialCanvas(
                 } catch (_: IllegalArgumentException) {
                     RemoteAvatarFallback
                 }
-            drawAvatarDot(
+            val peerSprite = peer.character?.let { ProfileStore.characterById(it).sprite }
+            drawAvatar(
                 center = peerScreen,
-                radiusPx = avatarState.radius * viewport.scale,
+                radiusPx = avatarRadiusPx,
                 fillColor = peerColor,
                 showSpeakingHalo = peer.isSpeaking,
+                sprite = peerSprite,
             )
         }
     }
@@ -190,11 +199,12 @@ private fun DrawScope.drawBackgroundCover(
     )
 }
 
-private fun DrawScope.drawAvatarDot(
+private fun DrawScope.drawAvatar(
     center: Offset,
     radiusPx: Float,
     fillColor: Color,
     showSpeakingHalo: Boolean,
+    sprite: PixelSprite?,
 ) {
     if (showSpeakingHalo) {
         drawCircle(
@@ -203,5 +213,45 @@ private fun DrawScope.drawAvatarDot(
             center = center,
         )
     }
-    drawCircle(color = fillColor, radius = radiusPx.coerceAtLeast(4f), center = center)
+    val r = radiusPx.coerceAtLeast(4f)
+    if (sprite == null) {
+        drawCircle(color = fillColor, radius = r, center = center)
+        return
+    }
+    // Soft colored backdrop so the sprite reads against any map tile.
+    drawCircle(color = fillColor.copy(alpha = 0.35f), radius = r * 1.05f, center = center)
+    drawPixelSprite(
+        sprite = sprite,
+        center = center,
+        sizePx = r * 2.2f,
+        primary = fillColor,
+    )
+}
+
+private fun DrawScope.drawPixelSprite(
+    sprite: PixelSprite,
+    center: Offset,
+    sizePx: Float,
+    primary: Color,
+) {
+    val side = sprite.sideCells.coerceAtLeast(1)
+    val cell = sizePx / side
+    val originX = center.x - sizePx / 2f
+    val originY = center.y - sizePx / 2f
+    sprite.rows.forEachIndexed { y, row ->
+        row.forEachIndexed inner@{ x, ch ->
+            val color =
+                when (ch) {
+                    '1' -> primary
+                    '2' -> SpriteLight
+                    '3' -> SpriteDark
+                    else -> null
+                } ?: return@inner
+            drawRect(
+                color = color,
+                topLeft = Offset(originX + x * cell, originY + y * cell),
+                size = Size(cell, cell),
+            )
+        }
+    }
 }
