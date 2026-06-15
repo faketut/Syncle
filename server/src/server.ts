@@ -6,6 +6,7 @@ import { TokenSigner } from "./livekit.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerSnapshotRoutes } from "./routes/snapshot.js";
 import { registerStateRoutes } from "./routes/state.js";
+import { registerChannelRoutes } from "./routes/channels.js";
 
 export async function buildApp(overrideEnv?: NodeJS.ProcessEnv) {
   const cfg = loadConfig(overrideEnv ?? process.env);
@@ -33,6 +34,7 @@ export async function buildApp(overrideEnv?: NodeJS.ProcessEnv) {
   });
   registerSnapshotRoutes(app, db);
   registerStateRoutes(app, { db, apiSecret: cfg.LIVEKIT_API_SECRET });
+  registerChannelRoutes(app, { db, apiSecret: cfg.LIVEKIT_API_SECRET });
 
   app.addHook("onClose", async () => {
     db.close();

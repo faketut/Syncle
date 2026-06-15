@@ -1,0 +1,60 @@
+{
+  "map_name": "Syncle Office (Procedural)",
+  "width": 1000,
+  "height": 800,
+  "background_color": "#2f3641",
+  "objects": [
+    { "type": "wall", "x": 0,    "y": 0,   "width": 1000, "height": 24 },
+    { "type": "wall", "x": 0,    "y": 776, "width": 1000, "height": 24 },
+    { "type": "wall", "x": 0,    "y": 0,   "width": 24,   "height": 800 },
+    { "type": "wall", "x": 976,  "y": 0,   "width": 24,   "height": 800 },
+
+    { "type": "wall", "x": 24,   "y": 380, "width": 360,  "height": 16 },
+    { "type": "wall", "x": 620,  "y": 380, "width": 356,  "height": 16 },
+
+    { "type": "wall", "x": 480,  "y": 24,  "width": 16,   "height": 200 },
+
+    { "type": "rug",  "x": 80,   "y": 80,  "width": 320,  "height": 240, "color": "#3a4250" },
+    { "type": "rug",  "x": 580,  "y": 80,  "width": 340,  "height": 240, "color": "#3a4250" },
+    { "type": "rug",  "x": 320,  "y": 460, "width": 360,  "height": 280, "color": "#3a4250" },
+
+    { "type": "table", "id": "table-eng",     "label": "Engineering", "x": 120, "y": 140, "width": 240, "height": 90 },
+    { "type": "table", "id": "table-design",  "label": "Design",      "x": 620, "y": 140, "width": 260, "height": 90 },
+    { "type": "table", "id": "table-standup", "label": "Standup",     "x": 380, "y": 520, "width": 240, "height": 80 },
+    { "type": "table", "id": "table-lounge",  "label": "Lounge",      "x": 80,  "y": 600, "width": 180, "height": 100 },
+    { "type": "table", "id": "table-quiet",   "label": "Quiet",       "x": 760, "y": 600, "width": 180, "height": 100 },
+
+    { "type": "chair", "x": 160, "y": 240, "width": 32, "height": 32 },
+    { "type": "chair", "x": 220, "y": 240, "width": 32, "height": 32 },
+    { "type": "chair", "x": 280, "y": 240, "width": 32, "height": 32 },
+    { "type": "chair", "x": 660, "y": 240, "width": 32, "height": 32 },
+    { "type": "chair", "x": 720, "y": 240, "width": 32, "height": 32 },
+    { "type": "chair", "x": 780, "y": 240, "width": 32, "height": 32 },
+    { "type": "chair", "x": 840, "y": 240, "width": 32, "height": 32 },
+
+    { "type": "plant", "x": 40,  "y": 40,  "width": 36, "height": 36 },
+    { "type": "plant", "x": 924, "y": 40,  "width": 36, "height": 36 },
+    { "type": "plant", "x": 40,  "y": 724, "width": 36, "height": 36 },
+    { "type": "plant", "x": 924, "y": 724, "width": 36, "height": 36 },
+    { "type": "plant", "x": 480, "y": 240, "width": 36, "height": 36 },
+
+    { "type": "door",  "x": 384, "y": 380, "width": 236, "height": 16 },
+
+    { "type": "board", "id": "board-prs", "label": "Team PRs", "repo": "faketut/Syncle", "x": 60, "y": 320, "width": 180, "height": 40 },
+
+    {
+      "type": "portal",
+      "id": "portal-lounge",
+      "label": "Lounge →",
+      "x": 880,
+      "y": 720,
+      "width": 60,
+      "height": 60,
+      "destination": {
+        "mapUrl": "/maps/lounge.json",
+        "label": "Lounge",
+        "spawn": { "x": 100, "y": 250 }
+      }
+    }
+  ]
+}

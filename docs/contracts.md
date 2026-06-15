@@ -1,8 +1,13 @@
 # Syncle shared contracts
 
 Authoritative definitions for values that MUST be kept in sync between the
-Android client and the Node backend. If you change one side, change the other
-side in the same PR.
+**Android client**, the **Web client** (`web/`), and the **Node backend**
+(`server/`). If you change one side, change the others in the same PR.
+
+For the binary position packet (17-byte little-endian: `type=1 | x:f32 | y:f32 | seq:i64`),
+see [app/.../PositionSyncEngine.kt](../app/src/main/java/com/example/syncle/domain/PositionSyncEngine.kt)
+and [web/src/domain/positionPacket.ts](../web/src/domain/positionPacket.ts) — both
+implementations must stay byte-identical.
 
 ## Room name
 
@@ -86,3 +91,32 @@ Response (200):
 Client behavior on token expiry: the reconnect loop refreshes the JWT when
 `expiresAt - now < 60_000` ms before the next LiveKit connect attempt
 (see `SyncleViewModel.scheduleReconnect`).
+
+## LiveKit participant attributes
+
+Per-participant key/value strings published via
+`LocalParticipant.setAttributes(...)` and observed by remotes via
+`RoomEvent.ParticipantAttributesChanged`. Both clients MUST use the keys
+below verbatim; servers do not validate them.
+
+| Key | Type | Purpose | Empty-string meaning |
+| --- | --- | --- | --- |
+| `table_id` | string | Currently seated table id. Drives the sit-at-table meeting feature. | "explicitly stood up" (cleared) |
+| `nickname` | string | Display name. Falls back to LiveKit identity when missing. | "not published" — keep existing |
+| `color`    | string | `#RRGGBB` accent color for avatar. Falls back to a default. | "not published" — keep existing |
+| `character`| string | Android-only sprite character id. Web ignores. | "not published" — keep existing |
+
+### Where it lives
+
+| Side | File | Symbol |
+| --- | --- | --- |
+| Android | [app/.../TablePresence.kt](../app/src/main/java/com/example/syncle/domain/TablePresence.kt) | `ATTR_TABLE_ID = "table_id"` |
+| Android | [app/.../SyncleViewModel.kt](../app/src/main/java/com/example/syncle/viewmodel/SyncleViewModel.kt) | `ATTR_COLOR`, `ATTR_NICKNAME`, `ATTR_CHARACTER` |
+| Web | [web/src/data/liveKitService.ts](../web/src/data/liveKitService.ts) | `setTableAttribute`, `publishProfileAttributes` |
+
+### Required server grant
+
+The JWT must include `canUpdateOwnMetadata: true` for clients to be allowed
+to call `setAttributes`. Without it, LiveKit responds with
+`SignalRequestError: does not have permission to update own metadata`.
+See [server/src/livekit.ts](../server/src/livekit.ts).

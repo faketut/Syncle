@@ -1,0 +1,24 @@
+# LiveKit dev config for local browser+Android testing.
+#
+# Why: in --dev mode LiveKit auto-detects its external IP via STUN. On a
+# machine behind a corporate proxy (Zscaler/Netskope/etc.) that returns the
+# proxy egress IP (e.g. 136.226.x.x), which LiveKit then advertises as an ICE
+# candidate. The browser sitting on the same host has no route to that public
+# address, so WebRTC negotiation times out.
+#
+# Pinning node_ip=127.0.0.1 forces a single host-local candidate. The browser
+# (same host) and the Android emulator (via 10.0.2.2) both reach the
+# host-published UDP/7882 directly without STUN.
+port: 7880
+bind_addresses:
+  - 0.0.0.0
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  # Advertise this address in ICE candidates instead of any STUN-derived one.
+  node_ip: 127.0.0.1
+keys:
+  devkey: secret
+logging:
+  level: info

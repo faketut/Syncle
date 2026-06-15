@@ -156,3 +156,103 @@ describe("GET /healthz", () => {
     expect(r.json().ok).toBe(true);
   });
 });
+
+describe("channels (M3)", () => {
+  it("starts with no channels for a room", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/rooms/room-chan-1/channels" });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().channels).toEqual([]);
+  });
+
+  it("creates a channel with auth and returns it from list", async () => {
+    const session = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { deviceId: "device-chan-1", nickname: "Chan", room: "room-chan-2" },
+    });
+    const { token } = session.json();
+
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/rooms/room-chan-2/channels",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "general" },
+    });
+    expect(created.statusCode).toBe(200);
+    const { channel } = created.json();
+    expect(channel.name).toBe("general");
+    expect(channel.id).toMatch(/^[0-9a-f-]{36}$/);
+
+    const list = await app.inject({ method: "GET", url: "/v1/rooms/room-chan-2/channels" });
+    expect(list.json().channels).toHaveLength(1);
+    expect(list.json().channels[0]).toMatchObject({ name: "general" });
+  });
+
+  it("is idempotent on (room, name)", async () => {
+    const session = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { deviceId: "device-chan-2", nickname: "Chan2", room: "room-chan-3" },
+    });
+    const { token } = session.json();
+
+    const a = await app.inject({
+      method: "POST",
+      url: "/v1/rooms/room-chan-3/channels",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "design" },
+    });
+    const b = await app.inject({
+      method: "POST",
+      url: "/v1/rooms/room-chan-3/channels",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "design" },
+    });
+    expect(a.statusCode).toBe(200);
+    expect(b.statusCode).toBe(200);
+    expect(a.json().channel.id).toBe(b.json().channel.id);
+  });
+
+  it("rejects channel creation without bearer", async () => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/rooms/room-chan-4/channels",
+      payload: { name: "secret" },
+    });
+    expect(r.statusCode).toBe(401);
+  });
+
+  it("rejects channel creation when token's room does not match", async () => {
+    const session = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { deviceId: "device-chan-3", nickname: "Chan3", room: "room-chan-5" },
+    });
+    const { token } = session.json();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/rooms/room-chan-6/channels",
+      headers: { authorization: `Bearer ${token}` },
+      payload: { name: "wrong" },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("rejects invalid channel names", async () => {
+    const session = await app.inject({
+      method: "POST",
+      url: "/v1/sessions",
+      payload: { deviceId: "device-chan-4", nickname: "Chan4", room: "room-chan-7" },
+    });
+    const { token } = session.json();
+    for (const name of ["", "UPPER", "has space", "a".repeat(33)]) {
+      const r = await app.inject({
+        method: "POST",
+        url: "/v1/rooms/room-chan-7/channels",
+        headers: { authorization: `Bearer ${token}` },
+        payload: { name },
+      });
+      expect(r.statusCode).toBe(400);
+    }
+  });
+});

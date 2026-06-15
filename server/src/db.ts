@@ -54,6 +54,15 @@ function migrate(db: Db): void {
     );
     CREATE INDEX IF NOT EXISTS idx_room_state_room_updated
       ON room_state(room, updated_at);
+    CREATE TABLE IF NOT EXISTS channels (
+      id TEXT PRIMARY KEY,
+      room TEXT NOT NULL,
+      name TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      UNIQUE(room, name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_channels_room
+      ON channels(room, name);
   `);
 }
 
@@ -145,4 +154,48 @@ export function getRoomSnapshot(
     y: r.y,
     lastSeen: r.updated_at,
   }));
+}
+
+// ---------- Channels (M3 rich chat) ----------
+
+export interface ChannelRow {
+  id: string;
+  room: string;
+  name: string;
+  created_at: number;
+}
+
+export function listChannels(db: Db, room: string): ChannelRow[] {
+  return db
+    .prepare<[string], ChannelRow>(
+      "SELECT * FROM channels WHERE room = ? ORDER BY name ASC",
+    )
+    .all(room);
+}
+
+/** Returns the row for the (room, name) pair, creating one if missing.
+ *  Idempotent: two callers racing to create the same name end up with the
+ *  same row. */
+export function upsertChannel(
+  db: Db,
+  room: string,
+  name: string,
+  now: number = Date.now(),
+): ChannelRow {
+  const existing = db
+    .prepare<[string, string], ChannelRow>(
+      "SELECT * FROM channels WHERE room = ? AND name = ?",
+    )
+    .get(room, name);
+  if (existing) return existing;
+  const row: ChannelRow = {
+    id: randomUUID(),
+    room,
+    name,
+    created_at: now,
+  };
+  db.prepare(
+    "INSERT INTO channels (id, room, name, created_at) VALUES (?, ?, ?, ?)",
+  ).run(row.id, row.room, row.name, row.created_at);
+  return row;
 }

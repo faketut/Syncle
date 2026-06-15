@@ -26,6 +26,10 @@ export class TokenSigner {
       canPublish: true,
       canSubscribe: true,
       canPublishData: true,
+      // Needed so clients can update their own attributes (e.g. `table_id`
+      // when sitting at a table). Without this LiveKit returns
+      // "does not have permission to update own metadata".
+      canUpdateOwnMetadata: true,
     });
     return {
       token: await at.toJwt(),

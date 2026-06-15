@@ -23,3 +23,7 @@ prd.md
 handoff.md
 last-session-diff.md
 
+
+# Python bytecode (skill scripts)
+__pycache__/
+*.pyc

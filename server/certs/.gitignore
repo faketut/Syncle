@@ -1,0 +1,4 @@
+# Site-specific CA bundles; never commit them.
+*.crt
+*.pem
+!README.md

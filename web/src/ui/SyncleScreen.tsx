@@ -1,0 +1,1186 @@
+import { useEffect, useRef, useState } from "react";
+import { Room, RoomEvent, Track, type Participant } from "livekit-client";
+import {
+  Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
+  MessageSquare, StickyNote, X,
+} from "lucide-react";
+import { SpatialCanvas } from "./SpatialCanvas";
+import {
+  AVATAR_RADIUS,
+  LOCAL_CHAT_IDENTITY,
+  MOVE_SPEED_PER_SEC,
+  POSITION_BROADCAST_HZ,
+  useSyncle,
+} from "../state/syncleStore";
+import {
+  applyMove,
+  findNearestBoard,
+  findNearestNote,
+  findNearestTable,
+  findPortalAt,
+  loadMapConfig,
+} from "../domain/mapConfig";
+import { encodePosition, nextSeq } from "../domain/positionPacket";
+import {
+  publishPosition,
+  publishReliable,
+  setCameraEnabled,
+  setMicEnabled,
+  setPeerVideoSubscribed,
+  setPeerVolume,
+  setScreenShareEnabled,
+  setStatusAttribute,
+  setTableAttribute,
+  setNowPlayingAttribute,
+} from "../data/liveKitService";
+import { ChatPanel } from "./ChatPanel";
+import { VideoTiles } from "./VideoTiles";
+import { WhosWherePanel } from "./WhosWherePanel";
+import { MeetingView } from "./MeetingView";
+import { MiniPanel } from "./MiniPanel";
+import { BoardModal } from "./BoardModal";
+import type { ConnectCache } from "../data/connectionController";
+import {
+  deriveStatus,
+  statusMeta,
+  type AvatarStatus,
+} from "../domain/avatarStatus";
+import {
+  DEFAULT_REACTION_INDEX,
+  encodeReaction,
+  REACTIONS,
+} from "../domain/reactionPacket";
+
+/** Pick up a table when the avatar center is within this many world units of
+ *  the table edge. Same idea as TableMeetingController on Android. */
+const TABLE_JOIN_RADIUS = 40;
+/** Show the "press F to read" hint when the avatar is within this radius of
+ *  a sticky-note object. */
+const NOTE_READ_RADIUS = 36;
+/** Minimum interval between two portal teleports. Prevents instant bounce
+ *  through an inverse portal at the destination. */
+const PORTAL_COOLDOWN_MS = 1500;
+/** localStorage key for the persisted mute preference. */
+const MUTE_PREF_KEY = "syncle.userMuted";
+
+function readPersistedMuted(): boolean {
+  try {
+    return localStorage.getItem(MUTE_PREF_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export interface SyncleScreenProps {
+  room: Room;
+  /** Connect cache. Always set in production; nullable for backwards-compat
+   *  with the prior signature. Used to read the latest session token (which
+   *  ConnectionController mutates in place on refresh) and to look up the
+   *  backend URL / room name for REST calls. */
+  cache?: ConnectCache | null;
+  onLeave: () => void;
+  /** Triggers an immediate reconnect attempt while the overlay is up. */
+  onRetryReconnect?: () => void;
+}
+
+export function SyncleScreen({ room, cache, onLeave, onRetryReconnect }: SyncleScreenProps) {
+  const map = useSyncle((s) => s.map);
+  const self = useSyncle((s) => s.self);
+  const peerCount = useSyncle((s) => s.peers.size);
+  const setSelfPosition = useSyncle((s) => s.setSelfPosition);
+  const setSelfTable = useSyncle((s) => s.setSelfTable);
+  // Stable signature that only changes when some peer's tableId changes (not
+  // on every position packet). Drives the audio-scoping effect without
+  // re-running 20Hz.
+  const peerTableSig = useSyncle((s) => {
+    let sig = "";
+    for (const [k, v] of s.peers) sig += `${k}:${v.tableId ?? ""};`;
+    return sig;
+  });
+
+  const keysRef = useRef<Set<string>>(new Set());
+  const rafRef = useRef<number | null>(null);
+  const lastTickRef = useRef<number>(performance.now());
+  const lastPublishRef = useRef<number>(0);
+  const lastPublishedRef = useRef<{ x: number; y: number } | null>(null);
+  /** Set while a portal teleport is in flight so we don't fire concurrent
+   *  map fetches. */
+  const portalLoadingRef = useRef(false);
+  /** ms epoch of the last portal teleport (or 0). Used with PORTAL_COOLDOWN_MS
+   *  to keep the player from instantly bouncing back through the inverse
+   *  portal on the destination side. */
+  const lastPortalAtRef = useRef<number>(0);
+  const [nearbyTable, setNearbyTable] = useState<string | null>(null);
+  const [nearbyNoteIndex, setNearbyNoteIndex] = useState<number | null>(null);
+  /** When set, render the NoteModal showing this note's text. */
+  const [readingNoteIndex, setReadingNoteIndex] = useState<number | null>(null);
+  /** Index of the nearest board, if any — drives the "press F" hint. */
+  const [nearbyBoardIndex, setNearbyBoardIndex] = useState<number | null>(null);
+  /** When set, render the BoardModal for this board. */
+  const [viewingBoardIndex, setViewingBoardIndex] = useState<number | null>(null);
+  // Refs so the keydown closure (which is registered once) can read current
+  // values without re-binding on every state change.
+  const nearbyNoteIndexRef = useRef<number | null>(null);
+  const readingNoteIndexRef = useRef<number | null>(null);
+  useEffect(() => { nearbyNoteIndexRef.current = nearbyNoteIndex; }, [nearbyNoteIndex]);
+  useEffect(() => { readingNoteIndexRef.current = readingNoteIndex; }, [readingNoteIndex]);
+  const nearbyBoardIndexRef = useRef<number | null>(null);
+  const viewingBoardIndexRef = useRef<number | null>(null);
+  useEffect(() => { nearbyBoardIndexRef.current = nearbyBoardIndex; }, [nearbyBoardIndex]);
+  useEffect(() => { viewingBoardIndexRef.current = viewingBoardIndex; }, [viewingBoardIndex]);
+  /** User-controlled push-to-mute. Only meaningful while seated (we always
+   *  publish silence while walking). Toggle with the HUD button or `M` key.
+   *  Persisted to localStorage so a reload doesn't unmute mid-meeting. */
+  const [userMuted, setUserMuted] = useState<boolean>(readPersistedMuted);
+  useEffect(() => {
+    try {
+      localStorage.setItem(MUTE_PREF_KEY, userMuted ? "1" : "0");
+    } catch {
+      /* storage unavailable; ignore */
+    }
+  }, [userMuted]);
+  /** Set to true after a mic permission denial / no-device. We then stop
+   *  re-publishing on every render and show an inline banner. Cleared when
+   *  the user clicks "Retry" or toggles unmute (which re-prompts). */
+  const [micDenied, setMicDenied] = useState(false);
+  // Ref so the keydown closure (registered once) can read the current value.
+  const micDeniedRef = useRef(false);
+  useEffect(() => { micDeniedRef.current = micDenied; }, [micDenied]);
+  /** Camera opt-in. Defaults to OFF — users explicitly turn it on so we
+   *  don't auto-prompt for permission on first sit. */
+  const [userCamOff, setUserCamOff] = useState(true);
+  /** Set to true after a camera permission denial so we stop retrying and
+   *  can show an inline hint instead. Cleared when the user toggles off. */
+  const [camDenied, setCamDenied] = useState(false);
+  /** Screen-share state. Unlike mic/cam this is event-driven: clicking the
+   *  button triggers the browser picker. We mirror the actual publication
+   *  state so that "Stop sharing" from the browser toolbar flips the button
+   *  back to inactive automatically. */
+  const [sharingScreen, setSharingScreen] = useState(false);
+  /** Reaction picker popover visibility. Press R for a quick wave; click the
+   *  Reactions HUD button to open this for a different glyph. */
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  /** Fullscreen meeting view (M4). Only meaningful while seated; auto-closes
+   *  when the user stands up so we don't show an empty grid. */
+  const [meetingViewOpen, setMeetingViewOpen] = useState(false);
+  /** Latest input timestamp, used to derive `away` status after idle. Bumped
+   *  on any keypress / mousemove. */
+  const lastInputAtRef = useRef(performance.now());
+  /** Ref-bridged pushReaction so the once-bound keydown handler can fire it
+   *  without re-binding on every store change. */
+  const pushReaction = useSyncle((s) => s.pushReaction);
+  const clearExpiredReactions = useSyncle((s) => s.clearExpiredReactions);
+  const setSelfStatus = useSyncle((s) => s.setSelfStatus);
+  const setManualBusy = useSyncle((s) => s.setManualBusy);
+  const theme = useSyncle((s) => s.theme);
+  const setTheme = useSyncle((s) => s.setTheme);
+  const miniMode = useSyncle((s) => s.miniMode);
+  const setMiniMode = useSyncle((s) => s.setMiniMode);
+  const setSelfNowPlaying = useSyncle((s) => s.setSelfNowPlaying);
+  const selfNowPlaying = useSyncle((s) => s.self?.nowPlaying ?? "");
+  /** Edit-state for the HUD now-playing input. Committed on Enter/blur. */
+  const [nowPlayingDraft, setNowPlayingDraft] = useState("");
+  const [nowPlayingOpen, setNowPlayingOpen] = useState(false);
+  useEffect(() => { setNowPlayingDraft(selfNowPlaying); }, [selfNowPlaying]);
+  const pushReactionRef = useRef(pushReaction);
+  useEffect(() => { pushReactionRef.current = pushReaction; }, [pushReaction]);
+  useEffect(() => {
+    const sync = () => {
+      let live = false;
+      for (const pub of room.localParticipant.trackPublications.values()) {
+        if (pub.source === Track.Source.ScreenShare && !pub.isMuted) {
+          live = true;
+          break;
+        }
+      }
+      setSharingScreen(live);
+    };
+    sync();
+    room
+      .on(RoomEvent.LocalTrackPublished, sync)
+      .on(RoomEvent.LocalTrackUnpublished, sync)
+      .on(RoomEvent.TrackMuted, sync)
+      .on(RoomEvent.TrackUnmuted, sync);
+    return () => {
+      room
+        .off(RoomEvent.LocalTrackPublished, sync)
+        .off(RoomEvent.LocalTrackUnpublished, sync)
+        .off(RoomEvent.TrackMuted, sync)
+        .off(RoomEvent.TrackUnmuted, sync);
+    };
+  }, [room]);
+  // If the user stands up while sharing, stop the share so we don't leak
+  // a screen to the room when they leave the table.
+  useEffect(() => {
+    if (self?.tableId == null && sharingScreen) {
+      void setScreenShareEnabled(room, false);
+    }
+  }, [room, self?.tableId, sharingScreen]);
+
+  // Auto-close meeting view if the user stands up. The view requires being
+  // seated to source tiles, and Gather mirrors this dismissal.
+  useEffect(() => {
+    if (self?.tableId == null && meetingViewOpen) {
+      setMeetingViewOpen(false);
+    }
+  }, [self?.tableId, meetingViewOpen]);
+  // Active speaker tracking: push the current speaker identities into the
+  // store so SpatialCanvas can draw a ring on whoever is talking. LiveKit
+  // emits this whenever the speaking set changes (typically every ~100ms
+  // while audio is active). Includes the local participant.
+  const setSpeakingIdentities = useSyncle((s) => s.setSpeakingIdentities);
+  useEffect(() => {
+    const handler = (speakers: Participant[]) => {
+      const ids = new Set<string>();
+      for (const p of speakers) ids.add(p.identity);
+      setSpeakingIdentities(ids);
+    };
+    room.on(RoomEvent.ActiveSpeakersChanged, handler);
+    return () => {
+      room.off(RoomEvent.ActiveSpeakersChanged, handler);
+      // Clear on unmount so a re-join starts with a clean set.
+      setSpeakingIdentities(new Set());
+    };
+  }, [room, setSpeakingIdentities]);
+
+  // Presence status auto-derivation. Runs on (seated, muted, manualBusy)
+  // changes and every 30s so the idle->away transition fires without input.
+  // We publish via setStatusAttribute → LiveKit attributes, which replays on
+  // peer (re)join just like table_id.
+  const selfStatus = useSyncle((s) => s.self?.status);
+  const selfManualBusy = useSyncle((s) => s.self?.manualBusy ?? false);
+  useEffect(() => {
+    if (!self) return;
+    const recompute = () => {
+      const idleMs = performance.now() - lastInputAtRef.current;
+      const next = deriveStatus({
+        seated: self.tableId != null,
+        muted: userMuted,
+        idleMs,
+        manualBusy: selfManualBusy,
+      });
+      if (next !== selfStatus) {
+        setSelfStatus(next);
+        void setStatusAttribute(room, next).catch((err) =>
+          console.warn("setStatusAttribute failed", err),
+        );
+      }
+    };
+    recompute();
+    const id = window.setInterval(recompute, 30_000);
+    return () => window.clearInterval(id);
+  }, [
+    room,
+    self,
+    self?.tableId,
+    userMuted,
+    selfManualBusy,
+    selfStatus,
+    setSelfStatus,
+  ]);
+
+  // Track user activity so deriveStatus can flip to `away`. Listens on
+  // window so we capture both game input and HUD interaction.
+  useEffect(() => {
+    const bump = () => {
+      lastInputAtRef.current = performance.now();
+    };
+    window.addEventListener("keydown", bump);
+    window.addEventListener("mousemove", bump);
+    return () => {
+      window.removeEventListener("keydown", bump);
+      window.removeEventListener("mousemove", bump);
+    };
+  }, []);
+
+  // Reaction expiry tick. Reactions live ~2s; this trims the map so the
+  // canvas stops painting them. 250ms cadence is invisible to users and
+  // far cheaper than a per-reaction setTimeout.
+  useEffect(() => {
+    const id = window.setInterval(() => clearExpiredReactions(), 250);
+    return () => window.clearInterval(id);
+  }, [clearExpiredReactions]);
+  /** Chat panel visibility + typing guard so WASD/M/E don't fire while the
+   *  user is composing a message. */
+  const [chatOpen, setChatOpen] = useState(false);
+  const [typingInChat, setTypingInChat] = useState(false);
+  const typingRef = useRef(false);
+  useEffect(() => { typingRef.current = typingInChat; }, [typingInChat]);
+  // Tracks unread count while panel is closed. Reset on open.
+  const chatMessagesLen = useSyncle((s) => s.chatMessages.length);
+  const [seenChatLen, setSeenChatLen] = useState(chatMessagesLen);
+  const unread = Math.max(0, chatMessagesLen - seenChatLen);
+  useEffect(() => {
+    if (chatOpen) setSeenChatLen(chatMessagesLen);
+  }, [chatOpen, chatMessagesLen]);
+  // When chat opens, drop any held movement keys so the avatar doesn't drift.
+  useEffect(() => {
+    if (chatOpen) keysRef.current.clear();
+  }, [chatOpen]);
+
+  // Keyboard input. WASD/arrows move; E toggles "sit at nearest table".
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      // Suppress all game keybinds while the user is typing in chat. The
+      // chat input itself handles Enter/Esc and stops propagation, so those
+      // never reach here.
+      if (typingRef.current) return;
+      if (isMoveKey(e.key)) {
+        e.preventDefault();
+        keysRef.current.add(e.key.toLowerCase());
+      } else if (e.key.toLowerCase() === "e") {
+        e.preventDefault();
+        // Toggle: if seated -> stand; else try to sit at nearest table.
+        const state = useSyncle.getState();
+        const selfNow = state.self;
+        const mapNow = state.map;
+        if (!selfNow || !mapNow) return;
+        if (selfNow.tableId) {
+          setSelfTable(null);
+          void setTableAttribute(room, null).catch((err) =>
+            console.warn("setTableAttribute(null) failed", err),
+          );
+        } else {
+          const near = findNearestTable(
+            selfNow.x,
+            selfNow.y,
+            mapNow,
+            TABLE_JOIN_RADIUS,
+          );
+          if (near) {
+            setSelfTable(near.id);
+            void setTableAttribute(room, near.id).catch((err) =>
+              console.warn("setTableAttribute failed", err),
+            );
+          }
+        }
+      } else if (e.key.toLowerCase() === "m") {
+        // Manual mute toggle. Only meaningful while seated, but we let users
+        // toggle it any time so the state persists across sit/stand. When
+        // mic is in the "denied" latch, pressing M acts as a retry.
+        e.preventDefault();
+        if (micDeniedRef.current) {
+          setMicDenied(false);
+          setUserMuted(false);
+        } else {
+          setUserMuted((prev) => !prev);
+        }
+      } else if (e.key.toLowerCase() === "t") {
+        // Open chat. (Closing is handled by the input's Esc handler so it
+        // doesn't compete with typed 't' characters.)
+        e.preventDefault();
+        setChatOpen(true);
+      } else if (e.key.toLowerCase() === "f") {
+        // Open the nearest interactive object. Boards take precedence over
+        // notes when both are within reach, since boards are larger and the
+        // intent is usually "open the PR list" when standing in front of one.
+        e.preventDefault();
+        const bIdx = nearbyBoardIndexRef.current;
+        if (bIdx != null) {
+          setViewingBoardIndex(bIdx);
+        } else {
+          const idx = nearbyNoteIndexRef.current;
+          if (idx != null) setReadingNoteIndex(idx);
+        }
+      } else if (e.key.toLowerCase() === "r") {
+        // Quick reaction (default = wave). The reaction picker UI lives in
+        // the HUD; this hotkey is the one-shot wave shortcut.
+        e.preventDefault();
+        const glyph = REACTIONS[DEFAULT_REACTION_INDEX].glyph;
+        pushReactionRef.current?.(LOCAL_CHAT_IDENTITY, glyph);
+        void publishReliable(room, encodeReaction(DEFAULT_REACTION_INDEX)).catch(
+          (err) => console.warn("publish reaction failed", err),
+        );
+      } else if (e.key === "Escape") {
+        // Close any note or board modal.
+        if (readingNoteIndexRef.current != null) {
+          e.preventDefault();
+          setReadingNoteIndex(null);
+        } else if (viewingBoardIndexRef.current != null) {
+          e.preventDefault();
+          setViewingBoardIndex(null);
+        }
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (typingRef.current) return;
+      if (isMoveKey(e.key)) {
+        e.preventDefault();
+        keysRef.current.delete(e.key.toLowerCase());
+      }
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+    };
+  }, [room, setSelfTable]);
+
+  // Game loop: move local avatar + 20Hz position broadcast.
+  useEffect(() => {
+    if (!map) return;
+    const publishIntervalMs = 1000 / POSITION_BROADCAST_HZ;
+
+    const tick = (now: number) => {
+      const dtMs = now - lastTickRef.current;
+      lastTickRef.current = now;
+      const dt = dtMs / 1000;
+
+      const keys = keysRef.current;
+      let dx = 0;
+      let dy = 0;
+      if (keys.has("w") || keys.has("arrowup")) dy -= 1;
+      if (keys.has("s") || keys.has("arrowdown")) dy += 1;
+      if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
+      if (keys.has("d") || keys.has("arrowright")) dx += 1;
+      if (dx !== 0 || dy !== 0) {
+        const len = Math.hypot(dx, dy);
+        dx /= len;
+        dy /= len;
+        const stepX = dx * MOVE_SPEED_PER_SEC * dt;
+        const stepY = dy * MOVE_SPEED_PER_SEC * dt;
+        const current = useSyncle.getState().self;
+        if (current) {
+          const moved = applyMove(
+            { x: current.x, y: current.y },
+            { x: stepX, y: stepY },
+            AVATAR_RADIUS,
+            map,
+          );
+          if (moved.x !== current.x || moved.y !== current.y) {
+            setSelfPosition(moved.x, moved.y);
+          }
+        }
+      }
+
+      // Portal teleport. Triggers when the avatar center enters a portal's
+      // AABB. Cooldown guards against immediate re-entry on the destination
+      // side. While loading we mark `portalLoadingRef.current` true so we
+      // don't fire concurrent fetches.
+      const portalSelf = useSyncle.getState().self;
+      if (
+        portalSelf &&
+        !portalLoadingRef.current &&
+        now - lastPortalAtRef.current > PORTAL_COOLDOWN_MS
+      ) {
+        const portal = findPortalAt(portalSelf.x, portalSelf.y, map);
+        if (portal && portal.destination) {
+          portalLoadingRef.current = true;
+          lastPortalAtRef.current = now;
+          const dest = portal.destination;
+          void loadMapConfig(dest.mapUrl)
+            .then((newMap) => {
+              const spawn = dest.spawn ?? { x: newMap.bounds.x + 40, y: newMap.bounds.y + 40 };
+              const st = useSyncle.getState();
+              st.setMap(newMap);
+              // Stand the user up: tables don't carry across maps.
+              st.setSelfTable(null);
+              st.setSelfPosition(spawn.x, spawn.y);
+              // Push the spawn position to peers so the avatar doesn't appear
+              // to slide across the old map briefly.
+              const packet = encodePosition(spawn.x, spawn.y, nextSeq());
+              void publishPosition(room, packet).catch((err) =>
+                console.warn("portal publish failed", err),
+              );
+            })
+            .catch((err) => {
+              console.warn("portal load failed", err);
+            })
+            .finally(() => {
+              portalLoadingRef.current = false;
+            });
+        }
+      }
+
+      // Broadcast at 20 Hz, but only when position changed since last publish.
+      if (now - lastPublishRef.current >= publishIntervalMs) {
+        const current = useSyncle.getState().self;
+        if (current) {
+          const last = lastPublishedRef.current;
+          if (!last || last.x !== current.x || last.y !== current.y) {
+            const packet = encodePosition(current.x, current.y, nextSeq());
+            void publishPosition(room, packet).catch((err) =>
+              console.warn("publishPosition failed", err),
+            );
+            lastPublishedRef.current = { x: current.x, y: current.y };
+            lastPublishRef.current = now;
+          }
+        }
+      }
+
+      // Update "nearest table" hint for HUD + canvas highlight. Cheap; runs
+      // every frame against the small table list. Skipped when seated.
+      const liveSelf = useSyncle.getState().self;
+      if (liveSelf) {
+        if (liveSelf.tableId) {
+          if (nearbyTable !== null) setNearbyTable(null);
+        } else {
+          const near = findNearestTable(
+            liveSelf.x,
+            liveSelf.y,
+            map,
+            TABLE_JOIN_RADIUS,
+          );
+          const id = near?.id ?? null;
+          if (id !== nearbyTable) setNearbyTable(id);
+        }
+        // Nearest note hint runs regardless of seated state — sitting doesn't
+        // stop you from reading sticky notes on the wall next to your table.
+        const nearNote = findNearestNote(
+          liveSelf.x,
+          liveSelf.y,
+          map,
+          NOTE_READ_RADIUS,
+        );
+        const idx = nearNote?.index ?? null;
+        if (idx !== nearbyNoteIndex) setNearbyNoteIndex(idx);
+        // Nearest board (re-uses the note interaction radius).
+        const nearBoard = findNearestBoard(
+          liveSelf.x,
+          liveSelf.y,
+          map,
+          NOTE_READ_RADIUS,
+        );
+        const bIdx = nearBoard?.index ?? null;
+        if (bIdx !== nearbyBoardIndex) setNearbyBoardIndex(bIdx);
+      }
+
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    lastTickRef.current = performance.now();
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, [map, room, setSelfPosition, nearbyTable, nearbyNoteIndex, nearbyBoardIndex]);
+
+  // Audio scoping: mic only publishes while seated AND the user hasn't
+  // manually muted. We only hear remote peers sitting at the *same* table.
+  // Same-table-only is enforced client-side via per-peer volume gain —
+  // privacy-wise, peers in other tables still receive our packets while we
+  // sit (their gain is 0), so future work could move this to server-side
+  // track subscription.
+  useEffect(() => {
+    if (!self) return;
+    const shouldPublish = self.tableId != null && !userMuted && !micDenied;
+    void setMicEnabled(room, shouldPublish).then((res) => {
+      if (res === "denied") {
+        setMicDenied(true);
+        setUserMuted(true);
+      }
+    });
+  }, [room, self?.tableId, userMuted, micDenied]);
+
+  // Camera publish gate. Mirrors mic: on only while seated and the user has
+  // opted in. Permission denial latches `camDenied` and forces userCamOff
+  // back to true so we don't re-prompt every render.
+  useEffect(() => {
+    if (!self) return;
+    const shouldPublish = self.tableId != null && !userCamOff && !camDenied;
+    void setCameraEnabled(room, shouldPublish).then((res) => {
+      if (res === "denied") {
+        setCamDenied(true);
+        setUserCamOff(true);
+      }
+    });
+  }, [room, self?.tableId, userCamOff, camDenied]);
+
+  useEffect(() => {
+    if (!self) return;
+    const myTable = self.tableId;
+    const peers = useSyncle.getState().peers;
+    for (const identity of room.remoteParticipants.keys()) {
+      const peerTable = peers.get(identity)?.tableId ?? null;
+      const sameTable = myTable != null && peerTable === myTable;
+      // M5 DND: when manualBusy is on, mute all incoming audio even when at
+      // the same table. Video subscriptions stay so the user can still see
+      // who's around.
+      const audible = sameTable && !selfManualBusy;
+      setPeerVolume(room, identity, audible ? 1 : 0);
+      // Same-table scoping for video: unsubscribe from non-table peers so
+      // we don't pay bandwidth for cameras we'd never render anyway.
+      setPeerVideoSubscribed(room, identity, sameTable);
+    }
+    // peerTableSig deliberately included so this re-runs when *any* peer
+    // changes table, without subscribing to 20Hz position updates.
+  }, [room, self?.tableId, peerTableSig, selfManualBusy]);
+
+  // M5 theme: apply to the document root so CSS `[data-theme="dark"]`
+  // overrides take effect. Persistence is handled by the store setter.
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.dataset.theme = theme;
+    }
+  }, [theme]);
+
+  // M7 now-playing: publish the local user's string as a LiveKit attribute
+  // whenever it changes. Empty string clears.
+  useEffect(() => {
+    void setNowPlayingAttribute(room, selfNowPlaying).catch((err) =>
+      console.warn("setNowPlayingAttribute failed", err),
+    );
+  }, [room, selfNowPlaying]);
+
+  if (!map || !self) return null;
+
+  const seated = self.tableId != null;
+  const micActive = seated && !userMuted && !micDenied;
+  const camActive = seated && !userCamOff && !camDenied;
+
+  return (
+    <div className={`syncle-screen${miniMode ? " mini" : ""}`}>
+      {!miniMode && (
+        <>
+          <SpatialCanvas highlightTable={nearbyTable} highlightNoteIndex={nearbyNoteIndex} />
+          <WhosWherePanel />
+        </>
+      )}
+      {miniMode && <MiniPanel onExit={() => setMiniMode(false)} />}
+      <div className="hud">
+        <div className="hud-row">
+          <strong style={{ color: self.color }}>{self.nickname}</strong>
+          <StatusPill
+            status={self.status}
+            manualBusy={self.manualBusy}
+            onToggleBusy={() => setManualBusy(!self.manualBusy)}
+          />
+          <button
+            type="button"
+            className="view-toggle"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            aria-label={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+            aria-pressed={theme === "dark"}
+          >
+            {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+          </button>
+          <button
+            type="button"
+            className="view-toggle"
+            onClick={() => setMiniMode(!miniMode)}
+            title={miniMode ? "Exit mini mode" : "Enter mini mode"}
+            aria-label={miniMode ? "Exit mini mode" : "Enter mini mode"}
+            aria-pressed={miniMode}
+          >
+            {miniMode ? <ExpandIcon /> : <MinimizeIcon />}
+          </button>
+          <button
+            type="button"
+            className="view-toggle"
+            onClick={() => setNowPlayingOpen((v) => !v)}
+            title="Set 'now playing' status (visible to peers)"
+            aria-label="Now playing"
+            aria-pressed={nowPlayingOpen}
+          >
+            <MusicIcon />
+          </button>
+        </div>
+        {nowPlayingOpen && (
+          <div className="now-playing-row">
+            <input
+              type="text"
+              className="now-playing-input"
+              placeholder="Now playing… (e.g. Daft Punk — One More Time)"
+              value={nowPlayingDraft}
+              maxLength={64}
+              onChange={(e) => setNowPlayingDraft(e.target.value)}
+              onFocus={() => { typingRef.current = true; }}
+              onBlur={() => {
+                typingRef.current = false;
+                setSelfNowPlaying(nowPlayingDraft.trim());
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  setSelfNowPlaying(nowPlayingDraft.trim());
+                  setNowPlayingOpen(false);
+                } else if (e.key === "Escape") {
+                  setNowPlayingDraft(selfNowPlaying);
+                  setNowPlayingOpen(false);
+                }
+                e.stopPropagation();
+              }}
+              aria-label="Now playing"
+              autoFocus
+            />
+            {selfNowPlaying.length > 0 && (
+              <button
+                type="button"
+                className="now-playing-clear"
+                onClick={() => {
+                  setNowPlayingDraft("");
+                  setSelfNowPlaying("");
+                }}
+                title="Clear now playing"
+                aria-label="Clear now playing"
+              >Clear</button>
+            )}
+          </div>
+        )}
+        <div className="peers">Peers: {peerCount}</div>
+        {seated ? (
+          <div className="peers">
+            Seated at <strong>{self.tableId}</strong> — press{" "}
+            <span className="key">E</span> to leave
+          </div>
+        ) : nearbyTable ? (
+          <div className="peers">
+            Press <span className="key">E</span> to join{" "}
+            <strong>{nearbyTable}</strong>
+          </div>
+        ) : (
+          <div className="peers">
+            Move: <span className="key">W</span><span className="key">A</span>
+            <span className="key">S</span><span className="key">D</span> /
+            arrow keys
+          </div>
+        )}
+        {nearbyNoteIndex != null && (
+          <div className="peers">
+            Press <span className="key">F</span> to read note
+          </div>
+        )}
+        {nearbyBoardIndex != null && (
+          <div className="peers">
+            Press <span className="key">F</span> to open board
+          </div>
+        )}
+        {micDenied && (
+          <div className="perm-banner" role="alert">
+            <MicOff size={14} aria-hidden="true" />
+            <span>Mic blocked or no input device.</span>{" "}
+            <button
+              type="button"
+              className="perm-banner-action"
+              onClick={() => {
+                // Clear latch + unmute so the publish effect re-prompts.
+                setMicDenied(false);
+                setUserMuted(false);
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+      </div>
+      <button
+        type="button"
+        className={`mic-toggle${micActive ? " on" : " off"}`}
+        onClick={() => {
+          // Clicking the button when blocked acts as "retry": clear the
+          // latch and un-mute so the next render re-attempts permission.
+          if (micDenied) {
+            setMicDenied(false);
+            setUserMuted(false);
+            return;
+          }
+          setUserMuted((v) => !v);
+        }}
+        title={
+          !seated
+            ? "Sit at a table to enable mic (M)"
+            : micDenied
+              ? "Mic blocked — click to retry"
+              : userMuted
+                ? "Unmute (M)"
+                : "Mute (M)"
+        }
+        aria-pressed={!micActive}
+      >
+        {micActive ? <Mic size={14} aria-hidden="true" /> : <MicOff size={14} aria-hidden="true" />}
+        <span>
+          {micActive ? "Mic on" : micDenied ? "Mic blocked" : "Muted"}
+        </span>
+        <span className="key" style={{ marginLeft: 6 }}>M</span>
+      </button>
+      <button
+        type="button"
+        className={`cam-toggle${camActive ? " on" : " off"}`}
+        onClick={() => {
+          // Toggling off always clears the latched permission flag so the
+          // next "on" click will re-prompt the browser.
+          if (camDenied) setCamDenied(false);
+          setUserCamOff((v) => !v);
+        }}
+        title={
+          !seated
+            ? "Sit at a table to enable camera"
+            : camDenied
+              ? "Camera blocked — check browser permissions"
+              : userCamOff
+                ? "Turn on camera"
+                : "Turn off camera"
+        }
+        disabled={!seated}
+        aria-pressed={!camActive}
+      >
+        {camActive ? <Video size={14} aria-hidden="true" /> : <VideoOff size={14} aria-hidden="true" />}
+        <span>{camActive ? "Cam on" : camDenied ? "Cam blocked" : "Cam off"}</span>
+      </button>
+      <button
+        type="button"
+        className={`screen-toggle${sharingScreen ? " on" : " off"}`}
+        onClick={() => {
+          void setScreenShareEnabled(room, !sharingScreen);
+        }}
+        title={
+          !seated
+            ? "Sit at a table to share your screen"
+            : sharingScreen
+              ? "Stop sharing your screen"
+              : "Share your screen with the table"
+        }
+        disabled={!seated}
+        aria-pressed={sharingScreen}
+      >
+        {sharingScreen ? <MonitorOff size={14} aria-hidden="true" /> : <Monitor size={14} aria-hidden="true" />}
+        <span>{sharingScreen ? "Stop share" : "Share screen"}</span>
+      </button>
+      <VideoTiles room={room} />
+      <button
+        type="button"
+        className="meeting-toggle"
+        onClick={() => setMeetingViewOpen(true)}
+        disabled={!seated}
+        title={
+          seated
+            ? "Open the fullscreen meeting view"
+            : "Sit at a table to open the meeting view"
+        }
+      >
+        <MeetingIcon />
+        Meeting view
+      </button>
+      <button
+        className="disconnect"
+        onClick={() => {
+          void room.disconnect().finally(onLeave);
+        }}
+      >
+        Leave
+      </button>
+      <button
+        type="button"
+        className={`chat-toggle${chatOpen ? " open" : ""}`}
+        onClick={() => setChatOpen((v) => !v)}
+        aria-pressed={chatOpen}
+        title={chatOpen ? "Close chat (Esc)" : "Open chat (T)"}
+      >
+        <MessageSquare size={14} aria-hidden="true" />
+        <span>Chat</span>
+        {unread > 0 && !chatOpen && (
+          <span className="chat-badge">{unread > 99 ? "99+" : unread}</span>
+        )}
+        <span className="key" style={{ marginLeft: 6 }}>T</span>
+      </button>
+      <ReactionLauncher
+        open={reactionPickerOpen}
+        onToggle={() => setReactionPickerOpen((v) => !v)}
+        onPick={(index) => {
+          setReactionPickerOpen(false);
+          pushReaction(LOCAL_CHAT_IDENTITY, REACTIONS[index].glyph);
+          void publishReliable(room, encodeReaction(index)).catch((err) =>
+            console.warn("publish reaction failed", err),
+          );
+        }}
+      />
+      <ChatPanel
+        room={room}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        onTypingChange={setTypingInChat}
+        backendUrl={cache?.backendUrl ?? ""}
+        roomName={cache?.room ?? ""}
+        getToken={() => cache?.session.token ?? ""}
+      />
+      {meetingViewOpen && (
+        <MeetingView room={room} onLeave={() => setMeetingViewOpen(false)} />
+      )}
+      {readingNoteIndex != null && map.objects[readingNoteIndex]?.type === "note" && (
+        <NoteModal
+          title={map.objects[readingNoteIndex].label}
+          text={map.objects[readingNoteIndex].text ?? ""}
+          onClose={() => setReadingNoteIndex(null)}
+        />
+      )}
+      {viewingBoardIndex != null && map.objects[viewingBoardIndex]?.type === "board" && (
+        <BoardModal
+          title={map.objects[viewingBoardIndex].label}
+          repo={map.objects[viewingBoardIndex].repo}
+          onClose={() => setViewingBoardIndex(null)}
+        />
+      )}
+      <ReconnectOverlay onRetry={onRetryReconnect} />
+    </div>
+  );
+}
+
+function ReconnectOverlay({ onRetry }: { onRetry?: () => void }) {
+  const reconnect = useSyncle((s) => s.reconnect);
+  if (!reconnect) return null;
+  return (
+    <div className="reconnect-overlay" role="alert" aria-live="polite">
+      <div className="reconnect-card">
+        <div className="reconnect-spinner" />
+        <div className="reconnect-title">Reconnecting…</div>
+        <div className="reconnect-sub">
+          Attempt {reconnect.attempt} of 10
+          {reconnect.reason ? ` · ${reconnect.reason.toLowerCase()}` : ""}
+        </div>
+        {onRetry && (
+          <button
+            type="button"
+            className="reconnect-action"
+            onClick={onRetry}
+          >
+            Retry now
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function NoteModal({
+  title,
+  text,
+  onClose,
+}: {
+  title?: string;
+  text: string;
+  onClose: () => void;
+}) {
+  return (
+    <div className="note-modal-backdrop" onClick={onClose}>
+      <div
+        className="note-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sticky note"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="note-modal-header">
+          <span className="note-modal-title">
+            <StickyNote size={14} aria-hidden="true" />
+            {title && title.length > 0 ? title : "Note"}
+          </span>
+          <button onClick={onClose} aria-label="Close note" className="icon-btn">
+            <X size={14} aria-hidden="true" />
+          </button>
+        </div>
+        <div className="note-modal-body">
+          {text.length > 0 ? text : <em>(empty)</em>}
+        </div>
+        <div className="note-modal-footer">
+          <span className="key">Esc</span> to close
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function isMoveKey(k: string): boolean {
+  const lk = k.toLowerCase();
+  return (
+    lk === "w" ||
+    lk === "a" ||
+    lk === "s" ||
+    lk === "d" ||
+    lk === "arrowup" ||
+    lk === "arrowdown" ||
+    lk === "arrowleft" ||
+    lk === "arrowright"
+  );
+}
+
+/** Presence status pill (top-right of HUD). Click toggles manual Busy/DND
+ *  which overrides auto-derivation. Icon is an inline SVG dot — design
+ *  system rule: no emoji as icons. */
+function StatusPill({
+  status,
+  manualBusy,
+  onToggleBusy,
+}: {
+  status: AvatarStatus;
+  manualBusy: boolean;
+  onToggleBusy: () => void;
+}) {
+  const meta = statusMeta(status);
+  return (
+    <button
+      type="button"
+      className="status-pill"
+      onClick={onToggleBusy}
+      aria-pressed={manualBusy}
+      aria-label={`Status: ${meta.label}. Click to ${manualBusy ? "clear Do Not Disturb" : "set Do Not Disturb"}.`}
+      title={manualBusy ? "Clear Do Not Disturb" : "Set Do Not Disturb"}
+      style={{ background: meta.pillBackground }}
+    >
+      <svg
+        width="10"
+        height="10"
+        viewBox="0 0 10 10"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <circle cx="5" cy="5" r="4" fill={meta.ringColor} />
+      </svg>
+      <span className="status-pill-label">{meta.label}</span>
+    </button>
+  );
+}
+
+/** Reaction picker. Closed by default; clicking the button opens a small
+ *  popover with the catalog. Keyboard `R` sends the default (wave) without
+ *  opening the picker. */
+function ReactionLauncher({
+  open,
+  onToggle,
+  onPick,
+}: {
+  open: boolean;
+  onToggle: () => void;
+  onPick: (index: number) => void;
+}) {
+  return (
+    <div className="reaction-launcher">
+      {open && (
+        <div className="reaction-popover" role="menu">
+          {REACTIONS.map((r, i) => (
+            <button
+              key={r.label}
+              type="button"
+              className="reaction-option"
+              role="menuitem"
+              onClick={() => onPick(i)}
+              aria-label={r.label}
+              title={r.label}
+            >
+              <span aria-hidden="true">{r.glyph}</span>
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        className={`reaction-toggle${open ? " open" : ""}`}
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-haspopup="menu"
+        title="React (R for wave)"
+      >
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path d="M18 11V6a2 2 0 0 0-4 0v5" />
+          <path d="M14 10V4a2 2 0 0 0-4 0v6" />
+          <path d="M10 10.5V6a2 2 0 0 0-4 0v8" />
+          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2a8 8 0 0 1-7.4-5L2 13" />
+        </svg>
+        React
+        <span className="key" style={{ marginLeft: 6 }}>R</span>
+      </button>
+    </div>
+  );
+}
+
+/** Small video-camera glyph for the meeting-view HUD button. Lucide-style
+ *  outlined SVG (design system rule: no emoji-as-icon). */
+function MeetingIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <polygon points="23 7 16 12 23 17 23 7" />
+      <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
+    </svg>
+  );
+}
+
+/** Sun glyph for the dark→light theme toggle. Lucide-style. */
+function SunIcon() {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"
+    >
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  );
+}
+
+/** Moon glyph for the light→dark theme toggle. Lucide-style. */
+function MoonIcon() {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"
+    >
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+/** Two-arrow inward "minimize" glyph used to enter mini mode. */
+function MinimizeIcon() {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"
+    >
+      <polyline points="4 14 10 14 10 20" />
+      <polyline points="20 10 14 10 14 4" />
+      <line x1="14" y1="10" x2="21" y2="3" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  );
+}
+
+/** Two-arrow outward "expand" glyph used to exit mini mode. */
+function ExpandIcon() {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"
+    >
+      <polyline points="15 3 21 3 21 9" />
+      <polyline points="9 21 3 21 3 15" />
+      <line x1="21" y1="3" x2="14" y2="10" />
+      <line x1="3" y1="21" x2="10" y2="14" />
+    </svg>
+  );
+}
+
+/** Music note glyph used for the now-playing HUD toggle. Lucide-style. */
+function MusicIcon() {
+  return (
+    <svg
+      width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"
+    >
+      <path d="M9 17V5l12-2v12" />
+      <circle cx="6" cy="17" r="3" />
+      <circle cx="18" cy="15" r="3" />
+    </svg>
+  );
+}

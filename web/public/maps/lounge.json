@@ -1,0 +1,40 @@
+{
+  "map_name": "Syncle Lounge",
+  "width": 700,
+  "height": 500,
+  "background_color": "#2d2a3a",
+  "objects": [
+    { "type": "wall", "x": 0,   "y": 0,   "width": 700, "height": 24 },
+    { "type": "wall", "x": 0,   "y": 476, "width": 700, "height": 24 },
+    { "type": "wall", "x": 0,   "y": 0,   "width": 24,  "height": 500 },
+    { "type": "wall", "x": 676, "y": 0,   "width": 24,  "height": 500 },
+
+    { "type": "rug", "x": 80,  "y": 80,  "width": 540, "height": 340, "color": "#3a3550" },
+
+    { "type": "table", "id": "table-couch",   "label": "Couch",       "x": 140, "y": 140, "width": 200, "height": 90 },
+    { "type": "table", "id": "table-fireplace","label": "Fireplace",  "x": 380, "y": 140, "width": 200, "height": 90 },
+    { "type": "table", "id": "table-piano",   "label": "Piano",       "x": 240, "y": 300, "width": 220, "height": 90 },
+
+    { "type": "plant", "x": 50,  "y": 50,  "width": 36, "height": 36 },
+    { "type": "plant", "x": 614, "y": 50,  "width": 36, "height": 36 },
+    { "type": "plant", "x": 50,  "y": 414, "width": 36, "height": 36 },
+    { "type": "plant", "x": 614, "y": 414, "width": 36, "height": 36 },
+
+    { "type": "zone", "id": "zone-lounge", "label": "Lounge", "x": 80, "y": 80, "width": 540, "height": 340, "color": "rgba(170,120,255,0.10)" },
+
+    {
+      "type": "portal",
+      "id": "portal-back",
+      "label": "← Office",
+      "x": 600,
+      "y": 220,
+      "width": 60,
+      "height": 60,
+      "destination": {
+        "mapUrl": "/maps/office-procedural.json",
+        "label": "Office",
+        "spawn": { "x": 200, "y": 330 }
+      }
+    }
+  ]
+}

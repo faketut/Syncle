@@ -1,4 +1,11 @@
-# Syncle (Spatial Workstream) — Android Client
+# Syncle (Spatial Workstream) — Android + Web Clients
+
+> Cross-platform spatial workspace: an **Android** app (Kotlin/Compose) and a
+> **Web** app (React/Vite/TypeScript) join the **same LiveKit room** and talk
+> to the **same Node backend**. A browser user and a phone user see each other
+> as ordinary peers in the same 2D office. The web client is the primary
+> prototyping surface for new features — once a feature stabilizes, port it to
+> Android. See [web/README.md](web/README.md) for the web setup.
 
 ![Kotlin](https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?style=for-the-badge&logo=kotlin)
 ![Jetpack Compose](https://img.shields.io/badge/Jetpack%20Compose-BOM%202023.03-4285F4?style=for-the-badge&logo=android)

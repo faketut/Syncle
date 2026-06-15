@@ -1,0 +1,9 @@
+node_modules
+dist
+.env
+.env.local
+public/map_config.json
+public/room1.jpg
+*.log
+*.tsbuildinfo
+.DS_Store
