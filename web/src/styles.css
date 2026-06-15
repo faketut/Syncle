@@ -259,6 +259,11 @@ select {
   width: 100%;
   height: 100%;
   outline: none;
+  /* Pixel-art rendering: keep tile sheets crisp at any zoom. The 2D
+   * context also calls `ctx.imageSmoothingEnabled = false` for the same
+   * reason on the bitmap path. */
+  image-rendering: pixelated;
+  image-rendering: -moz-crisp-edges;
 }
 
 .hud {

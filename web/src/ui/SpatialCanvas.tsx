@@ -4,6 +4,14 @@ import { computeViewport, worldToScreen } from "../domain/camera";
 import type { MapConfig } from "../types/mapConfig";
 import { drawObject } from "./mapDraw";
 import { statusMeta, type AvatarStatus } from "../domain/avatarStatus";
+import {
+  SHEET_URLS,
+  FLOOR_TILE,
+  CHAR_CELL_W,
+  CHAR_CELL_H,
+  charCellForIdentity,
+  type SpriteSheetKey,
+} from "./spriteAtlas";
 
 export interface SpatialCanvasProps {
   /** Table id the local avatar is close enough to join; drawn with a halo. */
@@ -18,6 +26,16 @@ export function SpatialCanvas({
 }: SpatialCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const bgRef = useRef<HTMLImageElement | null>(null);
+  // Sprite sheets preloaded once and reused across frames. `null` means
+  // the sheet hasn't loaded yet (or failed) — renderer falls back to
+  // procedural drawing in that case.
+  const sheetsRef = useRef<Record<SpriteSheetKey, HTMLImageElement | null>>({
+    rooms: null, interior: null, chars: null,
+  });
+  // Cached pattern for the floor tile (built lazily once the rooms sheet
+  // has loaded). Pattern is in screen pixels so it must rebuild when
+  // viewport scale changes.
+  const floorPatternRef = useRef<{ pattern: CanvasPattern; scale: number } | null>(null);
   const map = useSyncle((s) => s.map);
   const highlightRef = useRef<string | null>(highlightTable);
   const highlightNoteRef = useRef<number | null>(highlightNoteIndex);
@@ -39,6 +57,27 @@ export function SpatialCanvas({
       bgRef.current = img;
     };
   }, [map]);
+
+  // Preload pixel-art sprite sheets once on mount. Each load just flips a
+  // slot in `sheetsRef`; the render loop reads that imperatively next
+  // frame, no re-render needed.
+  useEffect(() => {
+    let cancelled = false;
+    (Object.keys(SHEET_URLS) as SpriteSheetKey[]).forEach((key) => {
+      const img = new Image();
+      img.src = SHEET_URLS[key];
+      img.onload = () => {
+        if (!cancelled) sheetsRef.current[key] = img;
+      };
+      img.onerror = () => {
+        // Quiet: missing sheet just falls back to procedural rendering.
+        if (!cancelled) sheetsRef.current[key] = null;
+      };
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Render loop. Reading from the zustand store via getState() in raf keeps
   // the canvas redrawing every frame without subscribing this component to
@@ -90,13 +129,53 @@ export function SpatialCanvas({
       ctx.fillStyle = voidGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // Floor: bitmap if provided, else solid color fill within map bounds.
+      // Floor: pixel-art tile pattern if the rooms sheet has loaded, else
+      // a bitmap background image if the map declares one, else solid
+      // color + procedural grid.
       const bg = bgRef.current;
+      const roomsSheet = sheetsRef.current.rooms;
       const floorX = map.bounds.x * vp.scale + vp.offsetX;
       const floorY = map.bounds.y * vp.scale + vp.offsetY;
       const floorW = map.bounds.width * vp.scale;
       const floorH = map.bounds.height * vp.scale;
-      if (bg) {
+      ctx.imageSmoothingEnabled = false;
+      if (roomsSheet) {
+        // Build the pattern lazily and rebuild when scale changes. We blit
+        // the FLOOR_TILE rect onto a small offscreen canvas at the
+        // current screen-pixel tile size, then turn that into a repeating
+        // pattern.
+        const tilePx = Math.max(1, Math.round(FLOOR_TILE.sw * vp.scale));
+        const cached = floorPatternRef.current;
+        if (!cached || cached.scale !== tilePx) {
+          const off = document.createElement("canvas");
+          off.width = tilePx;
+          off.height = tilePx;
+          const octx = off.getContext("2d");
+          if (octx) {
+            octx.imageSmoothingEnabled = false;
+            octx.drawImage(
+              roomsSheet,
+              FLOOR_TILE.sx, FLOOR_TILE.sy, FLOOR_TILE.sw, FLOOR_TILE.sh,
+              0, 0, tilePx, tilePx,
+            );
+            const pat = ctx.createPattern(off, "repeat");
+            if (pat) floorPatternRef.current = { pattern: pat, scale: tilePx };
+          }
+        }
+        const pat = floorPatternRef.current?.pattern;
+        if (pat) {
+          ctx.save();
+          // Align pattern origin to the floor's top-left so the seams sit
+          // on world tile boundaries instead of screen pixel 0,0.
+          ctx.translate(floorX, floorY);
+          ctx.fillStyle = pat;
+          ctx.fillRect(0, 0, floorW, floorH);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = map.backgroundColor;
+          ctx.fillRect(floorX, floorY, floorW, floorH);
+        }
+      } else if (bg) {
         ctx.drawImage(bg, floorX, floorY, floorW, floorH);
       } else {
         ctx.fillStyle = map.backgroundColor;
@@ -139,6 +218,7 @@ export function SpatialCanvas({
       }
 
       // Remote peers
+      const charsSheet = sheetsRef.current.chars;
       const speakers = state.speakingIdentities;
       const reactions = state.reactions;
       for (const peer of state.peers.values()) {
@@ -157,6 +237,8 @@ export function SpatialCanvas({
           peer.status,
           reactions.get(peer.identity)?.glyph ?? null,
           peer.nowPlaying ?? null,
+          charsSheet,
+          peer.identity,
         );
       }
 
@@ -174,6 +256,8 @@ export function SpatialCanvas({
         self.status,
         reactions.get(LOCAL_CHAT_IDENTITY)?.glyph ?? null,
         self.nowPlaying ?? null,
+        charsSheet,
+        self.userId,
       );
 
       frame = requestAnimationFrame(draw);
@@ -293,6 +377,8 @@ function drawAvatar(
   status: AvatarStatus = "available",
   reactionGlyph: string | null = null,
   nowPlaying: string | null = null,
+  charsSheet: HTMLImageElement | null = null,
+  identity: string = "",
 ) {
   ctx.save();
   // Presence status ring: thin colored ring tight to the avatar. Drawn
@@ -324,13 +410,30 @@ function drawAvatar(
     ctx.arc(x, y, r + extra, 0, Math.PI * 2);
     ctx.stroke();
   }
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = "rgba(0,0,0,0.6)";
-  ctx.lineWidth = 2;
-  ctx.stroke();
+  // Avatar body: pixel-art character sprite if the sheet is loaded;
+  // otherwise the legacy colored disc.
+  if (charsSheet && identity) {
+    const { col, row } = charCellForIdentity(identity);
+    // Sprite is drawn at ~2.4r tall (legacy disc has 2r diameter; pixel
+    // chars need a hair more vertical room for the head). Center the
+    // sprite on (x, y) but bias up so the feet roughly sit at +r.
+    const drawH = Math.round(r * 2.4);
+    const drawW = Math.round((drawH * CHAR_CELL_W) / CHAR_CELL_H);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(
+      charsSheet,
+      col * CHAR_CELL_W, row * CHAR_CELL_H, CHAR_CELL_W, CHAR_CELL_H,
+      Math.round(x - drawW / 2), Math.round(y - drawH * 0.65), drawW, drawH,
+    );
+  } else {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.6)";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
 
   ctx.fillStyle = "rgba(0,0,0,0.7)";
   ctx.font = "12px system-ui";

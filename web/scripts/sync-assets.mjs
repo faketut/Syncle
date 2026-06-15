@@ -10,10 +10,19 @@ const here = dirname(fileURLToPath(import.meta.url));
 const webDir = resolve(here, "..");
 const assetsDir = resolve(webDir, "..", "app", "src", "main", "assets");
 const publicDir = resolve(webDir, "public");
+const spritesDir = resolve(publicDir, "sprites");
 
+// Top-level public files (served at `/<name>`).
 const targets = ["map_config.json", "room1.jpg"];
+// Pixel-art sprite sheets shared with Android (served at `/sprites/<name>`).
+const spriteTargets = [
+  "16x16-walk-sheet.png",
+  "interior-tile.png",
+  "room-builder-tile.png",
+];
 
 await mkdir(publicDir, { recursive: true });
+await mkdir(spritesDir, { recursive: true });
 
 for (const name of targets) {
   const src = resolve(assetsDir, name);
@@ -24,4 +33,15 @@ for (const name of targets) {
   }
   await cp(src, dst);
   console.log(`[sync-assets] ${name}`);
+}
+
+for (const name of spriteTargets) {
+  const src = resolve(assetsDir, name);
+  const dst = resolve(spritesDir, name);
+  if (!existsSync(src)) {
+    console.error(`[sync-assets] missing sprite: ${src}`);
+    process.exit(1);
+  }
+  await cp(src, dst);
+  console.log(`[sync-assets] sprites/${name}`);
 }

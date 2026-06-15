@@ -4,6 +4,7 @@ dist
 .env.local
 public/map_config.json
 public/room1.jpg
+public/sprites/
 *.log
 *.tsbuildinfo
 .DS_Store
