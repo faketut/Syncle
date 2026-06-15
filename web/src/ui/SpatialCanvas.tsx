@@ -1,15 +1,14 @@
 import { useEffect, useRef } from "react";
 import { useSyncle, LOCAL_CHAT_IDENTITY } from "../state/syncleStore";
 import { computeViewport, worldToScreen } from "../domain/camera";
-import type { MapConfig } from "../types/mapConfig";
+import type { MapConfig, MapObject } from "../types/mapConfig";
 import { drawObject } from "./mapDraw";
 import { statusMeta, type AvatarStatus } from "../domain/avatarStatus";
 import {
   SHEET_URLS,
   FLOOR_TILE,
-  CHAR_CELL_W,
-  CHAR_CELL_H,
-  charCellForIdentity,
+  FURNITURE,
+  charUrlForIdentity,
   type SpriteSheetKey,
 } from "./spriteAtlas";
 
@@ -30,9 +29,14 @@ export function SpatialCanvas({
   // the sheet hasn't loaded yet (or failed) — renderer falls back to
   // procedural drawing in that case.
   const sheetsRef = useRef<Record<SpriteSheetKey, HTMLImageElement | null>>({
-    rooms: null, interior: null, chars: null,
+    walls: null, furniture: null, carpets: null,
   });
-  // Cached pattern for the floor tile (built lazily once the rooms sheet
+  // Character portraits are 50 separate tiny PNGs (~300 B each). We load
+  // each on first request, keyed by URL, and reuse from this cache for
+  // subsequent frames. Map miss = sprite not yet loaded, render falls
+  // back to the colored disc.
+  const charCacheRef = useRef<Map<string, HTMLImageElement>>(new Map());
+  // Cached pattern for the floor tile (built lazily once the walls sheet
   // has loaded). Pattern is in screen pixels so it must rebuild when
   // viewport scale changes.
   const floorPatternRef = useRef<{ pattern: CanvasPattern; scale: number } | null>(null);
@@ -129,17 +133,17 @@ export function SpatialCanvas({
       ctx.fillStyle = voidGrad;
       ctx.fillRect(0, 0, w, h);
 
-      // Floor: pixel-art tile pattern if the rooms sheet has loaded, else
+      // Floor: pixel-art tile pattern if the walls sheet has loaded, else
       // a bitmap background image if the map declares one, else solid
       // color + procedural grid.
       const bg = bgRef.current;
-      const roomsSheet = sheetsRef.current.rooms;
+      const wallsSheet = sheetsRef.current.walls;
       const floorX = map.bounds.x * vp.scale + vp.offsetX;
       const floorY = map.bounds.y * vp.scale + vp.offsetY;
       const floorW = map.bounds.width * vp.scale;
       const floorH = map.bounds.height * vp.scale;
       ctx.imageSmoothingEnabled = false;
-      if (roomsSheet) {
+      if (wallsSheet) {
         // Build the pattern lazily and rebuild when scale changes. We blit
         // the FLOOR_TILE rect onto a small offscreen canvas at the
         // current screen-pixel tile size, then turn that into a repeating
@@ -154,7 +158,7 @@ export function SpatialCanvas({
           if (octx) {
             octx.imageSmoothingEnabled = false;
             octx.drawImage(
-              roomsSheet,
+              wallsSheet,
               FLOOR_TILE.sx, FLOOR_TILE.sy, FLOOR_TILE.sw, FLOOR_TILE.sh,
               0, 0, tilePx, tilePx,
             );
@@ -200,7 +204,7 @@ export function SpatialCanvas({
       // walkable outlines so authors can still see the collision rects.
       const occupancy = computeOccupancy(state);
       if (map.objects.length > 0) {
-        drawObjects(ctx, map, vp, occupancy, highlightRef.current, highlightNoteRef.current);
+        drawObjects(ctx, map, vp, occupancy, highlightRef.current, highlightNoteRef.current, sheetsRef.current);
       } else {
         drawDebugWalkable(ctx, map, vp);
         // Legacy table outlines (procedural path draws them in drawObjects).
@@ -218,7 +222,7 @@ export function SpatialCanvas({
       }
 
       // Remote peers
-      const charsSheet = sheetsRef.current.chars;
+      const charCache = charCacheRef.current;
       const speakers = state.speakingIdentities;
       const reactions = state.reactions;
       for (const peer of state.peers.values()) {
@@ -237,7 +241,7 @@ export function SpatialCanvas({
           peer.status,
           reactions.get(peer.identity)?.glyph ?? null,
           peer.nowPlaying ?? null,
-          charsSheet,
+          charCache,
           peer.identity,
         );
       }
@@ -256,7 +260,7 @@ export function SpatialCanvas({
         self.status,
         reactions.get(LOCAL_CHAT_IDENTITY)?.glyph ?? null,
         self.nowPlaying ?? null,
-        charsSheet,
+        charCache,
         self.userId,
       );
 
@@ -343,6 +347,7 @@ function drawObjects(
   occupancy: Map<string, number>,
   highlightTable: string | null,
   highlightNoteIndex: number | null,
+  sheets: Record<SpriteSheetKey, HTMLImageElement | null>,
 ) {
   // Two-pass: zones first (so dashed borders sit under solid objects), then
   // everything else in author order. Index is preserved so the note-highlight
@@ -360,9 +365,85 @@ function drawObjects(
       const isHighlighted =
         (obj.type === "table" && obj.id != null && obj.id === highlightTable) ||
         (obj.type === "note" && i === highlightNoteIndex);
-      drawObject(ctx, obj, x, y, w, h, count, isHighlighted, vp.scale);
+      // If a pixel-art sprite is mapped for this type AND the sheet is
+      // loaded, draw the sprite. Otherwise fall through to the procedural
+      // fake-3D renderer in mapDraw.ts.
+      const rect = FURNITURE[obj.type];
+      const sheet = rect ? sheets[rect.sheet] : null;
+      if (rect && sheet && sheet.complete && sheet.naturalWidth > 0) {
+        drawSpriteObject(ctx, obj, x, y, w, h, count, isHighlighted, rect, sheet);
+      } else {
+        drawObject(ctx, obj, x, y, w, h, count, isHighlighted, vp.scale);
+      }
     }
   }
+}
+
+/** Draw a furniture object as a pixel-art sprite scaled into its rect.
+ *  Footprint shadow + label + highlight ring are preserved so the
+ *  behavior matches the procedural path (occupancy ring on tables,
+ *  pulse on highlighted tables, label text). */
+function drawSpriteObject(
+  ctx: CanvasRenderingContext2D,
+  obj: MapObject,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  occupantCount: number,
+  isHighlighted: boolean,
+  rect: { sx: number; sy: number; sw: number; sh: number },
+  sheet: HTMLImageElement,
+) {
+  ctx.save();
+  // Drop shadow so the sprite lifts off the floor.
+  ctx.fillStyle = "rgba(0,0,0,0.30)";
+  ctx.fillRect(x + 2, y + 4, w, h);
+  // Sprite scaled to the object's rect, nearest-neighbor.
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(sheet, rect.sx, rect.sy, rect.sw, rect.sh, x, y, w, h);
+  // Highlights stack the same way as the procedural table path.
+  if (isHighlighted) {
+    const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 250);
+    ctx.strokeStyle = `rgba(255, 220, 80, ${pulse.toFixed(3)})`;
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x - 4, y - 4, w + 8, h + 8);
+  } else if (occupantCount > 0) {
+    ctx.strokeStyle = "rgba(255, 170, 60, 0.85)";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x - 2, y - 2, w + 4, h + 4);
+  }
+  if (obj.label) {
+    ctx.fillStyle = "rgba(0,0,0,0.7)";
+    ctx.font = "11px system-ui";
+    const text = occupantCount > 0 ? `${obj.label} (${occupantCount})` : obj.label;
+    const tw = ctx.measureText(text).width + 8;
+    ctx.fillRect(x + w / 2 - tw / 2, y + h + 2, tw, 14);
+    ctx.fillStyle = "#fff";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x + w / 2, y + h + 9);
+  }
+  ctx.restore();
+}
+
+/** Lazy character image loader. Returns the cached HTMLImageElement for
+ *  an identity, kicking off a fetch on first call. Returns null when no
+ *  cache is available; the caller falls back to the colored disc until
+ *  `.complete && .naturalWidth > 0` flips true on a later frame. */
+function getOrLoadChar(
+  cache: Map<string, HTMLImageElement> | null,
+  identity: string,
+): HTMLImageElement | null {
+  if (!cache) return null;
+  const url = charUrlForIdentity(identity);
+  let img = cache.get(url) ?? null;
+  if (!img) {
+    img = new Image();
+    img.src = url;
+    cache.set(url, img);
+  }
+  return img;
 }
 
 function drawAvatar(
@@ -377,7 +458,7 @@ function drawAvatar(
   status: AvatarStatus = "available",
   reactionGlyph: string | null = null,
   nowPlaying: string | null = null,
-  charsSheet: HTMLImageElement | null = null,
+  charCache: Map<string, HTMLImageElement> | null = null,
   identity: string = "",
 ) {
   ctx.save();
@@ -410,20 +491,20 @@ function drawAvatar(
     ctx.arc(x, y, r + extra, 0, Math.PI * 2);
     ctx.stroke();
   }
-  // Avatar body: pixel-art character sprite if the sheet is loaded;
-  // otherwise the legacy colored disc.
-  if (charsSheet && identity) {
-    const { col, row } = charCellForIdentity(identity);
-    // Sprite is drawn at ~2.4r tall (legacy disc has 2r diameter; pixel
-    // chars need a hair more vertical room for the head). Center the
-    // sprite on (x, y) but bias up so the feet roughly sit at +r.
-    const drawH = Math.round(r * 2.4);
-    const drawW = Math.round((drawH * CHAR_CELL_W) / CHAR_CELL_H);
+  // Avatar body: pixel-art character sprite if cached; load on first
+  // request, fall back to the colored disc until it arrives.
+  const charImg = identity ? getOrLoadChar(charCache, identity) : null;
+  if (charImg && charImg.complete && charImg.naturalWidth > 0) {
+    // Pixel chars are 16×16; draw 2.4× the legacy disc radius tall to
+    // keep similar visual weight, then anchor so the feet sit near +r.
+    const drawSize = Math.round(r * 2.4);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(
-      charsSheet,
-      col * CHAR_CELL_W, row * CHAR_CELL_H, CHAR_CELL_W, CHAR_CELL_H,
-      Math.round(x - drawW / 2), Math.round(y - drawH * 0.65), drawW, drawH,
+      charImg,
+      Math.round(x - drawSize / 2),
+      Math.round(y - drawSize * 0.65),
+      drawSize,
+      drawSize,
     );
   } else {
     ctx.fillStyle = color;
