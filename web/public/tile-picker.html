@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Syncle Tile Picker</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    margin: 0;
+    background: #0e1116;
+    color: #e6e8eb;
+    font: 14px/1.4 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
+  header {
+    position: sticky; top: 0;
+    background: #14181f;
+    border-bottom: 1px solid #2a2f38;
+    padding: 12px 16px;
+    z-index: 10;
+  }
+  header h1 { margin: 0 0 6px; font-size: 18px; font-weight: 600; }
+  header p { margin: 0; color: #b5bcc6; font-size: 13px; }
+  main { padding: 16px; display: flex; flex-direction: column; gap: 32px; }
+  section { border: 1px solid #232a33; border-radius: 8px; padding: 12px; background: #141821; }
+  section h2 { margin: 0 0 4px; font-size: 16px; }
+  section p { margin: 0 0 12px; color: #9aa3af; font-size: 12px; }
+  .controls {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .controls label { font-size: 12px; color: #b5bcc6; }
+  .controls input[type=number] { width: 56px; background: #0e1116; color: #e6e8eb; border: 1px solid #2a2f38; border-radius: 4px; padding: 3px 6px; }
+  .controls button {
+    background: #1c2230; color: #e6e8eb; border: 1px solid #2a2f38;
+    border-radius: 4px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+  }
+  .controls button:hover { background: #232a38; }
+  .stage {
+    position: relative;
+    overflow: auto;
+    max-height: 70vh;
+    border: 1px solid #1c2230;
+    background: #05070a;
+    image-rendering: pixelated;
+  }
+  canvas { display: block; image-rendering: pixelated; cursor: crosshair; }
+  .hud {
+    position: sticky; bottom: 0;
+    background: rgba(20, 24, 33, 0.95);
+    border-top: 1px solid #2a2f38;
+    padding: 8px 12px;
+    font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: #b5bcc6;
+  }
+  .hud .picked { color: #5ac8fa; }
+  .hud .copied { color: #80e29c; }
+  .selection-list {
+    margin-top: 10px;
+    background: #0e1116;
+    border: 1px solid #2a2f38;
+    border-radius: 4px;
+    padding: 8px 12px;
+    font: 12px/1.5 ui-monospace, monospace;
+    white-space: pre;
+    overflow-x: auto;
+    color: #d7dce4;
+    min-height: 24px;
+  }
+  .selection-list .name { color: #5ac8fa; }
+  .selection-list .num { color: #f5c265; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Syncle Tile Picker</h1>
+  <p>Click on a sheet to pick a tile. Coords are reported in source pixels.
+     Drag to select a multi-cell sprite. The output box at the bottom shows
+     a ready-to-paste <code>SpriteRect</code> entry for
+     <code>web/src/ui/spriteAtlas.ts</code>.</p>
+</header>
+<main id="sheets"></main>
+
+<template id="sheet-tpl">
+  <section>
+    <h2 class="title"></h2>
+    <p class="meta"></p>
+    <div class="controls">
+      <label>cell size:
+        <input class="cellW" type="number" min="1" value="16">×<input class="cellH" type="number" min="1" value="16">
+      </label>
+      <label>zoom:
+        <input class="zoom" type="number" min="1" max="16" value="4">
+      </label>
+      <label>name: <input class="name" type="text" value="my_tile" style="width:140px; background:#0e1116; color:#e6e8eb; border:1px solid #2a2f38; border-radius:4px; padding:3px 6px;"></label>
+      <button class="clear">clear</button>
+    </div>
+    <div class="stage">
+      <canvas></canvas>
+    </div>
+    <div class="hud">
+      hover: <span class="hover">—</span> &nbsp;|&nbsp; pick: <span class="picked">—</span>
+      <span class="copied"></span>
+    </div>
+    <div class="selection-list">// click a cell, or drag to box-select multiple cells</div>
+  </section>
+</template>
+
+<script type="module">
+const SHEETS = [
+  { key: "rooms",    src: "/sprites/room-builder-tile.png", title: "room-builder-tile.png (272×368)",
+    note: "Wall/ceiling pieces on the left; floor pattern swatches on the right (cols 13–16)." },
+  { key: "interior", src: "/sprites/interior-tile.png",     title: "interior-tile.png (256×1424)",
+    note: "Furniture / decor props. Drag to box-select multi-cell items (most chairs are 1×2, tables 2×2, beds 2×3)." },
+  { key: "chars",    src: "/sprites/16x16-walk-sheet.png",  title: "16x16-walk-sheet.png (144×120)",
+    note: "30 static character designs in a 6×5 grid of 24×24 cells. Set cell size to 24×24." },
+];
+
+const sheetsEl = document.getElementById("sheets");
+const tpl = document.getElementById("sheet-tpl");
+
+for (const sheet of SHEETS) {
+  const node = tpl.content.firstElementChild.cloneNode(true);
+  node.querySelector(".title").textContent = sheet.title;
+  node.querySelector(".meta").textContent = sheet.note;
+  if (sheet.key === "chars") {
+    node.querySelector(".cellW").value = "24";
+    node.querySelector(".cellH").value = "24";
+    node.querySelector(".name").value = "char_0";
+  }
+  sheetsEl.appendChild(node);
+  attach(node, sheet);
+}
+
+function attach(node, sheet) {
+  const canvas = node.querySelector("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = false;
+  const stage = node.querySelector(".stage");
+  const cellWIn = node.querySelector(".cellW");
+  const cellHIn = node.querySelector(".cellH");
+  const zoomIn = node.querySelector(".zoom");
+  const nameIn = node.querySelector(".name");
+  const hoverEl = node.querySelector(".hover");
+  const pickedEl = node.querySelector(".picked");
+  const copiedEl = node.querySelector(".copied");
+  const listEl = node.querySelector(".selection-list");
+  const clearBtn = node.querySelector(".clear");
+  const img = new Image();
+  let picks = [];
+  let dragStart = null;
+  let dragCur = null;
+
+  img.onload = () => render();
+  img.onerror = () => {
+    ctx.fillStyle = "#3a1f1f"; ctx.fillRect(0, 0, 400, 80);
+    ctx.fillStyle = "#fff"; ctx.font = "13px monospace";
+    ctx.fillText(`failed to load ${sheet.src}`, 12, 28);
+    ctx.fillText("is `npm run sync-assets` up-to-date?", 12, 48);
+  };
+  img.src = sheet.src;
+
+  cellWIn.addEventListener("input", render);
+  cellHIn.addEventListener("input", render);
+  zoomIn.addEventListener("input", render);
+  clearBtn.addEventListener("click", () => { picks = []; renderList(); render(); });
+
+  canvas.addEventListener("mousemove", (e) => {
+    const { col, row, cw, ch, zoom } = pos(e);
+    hoverEl.textContent = `cell (${col}, ${row})  sx=${col*cw}, sy=${row*ch}, sw=${cw}, sh=${ch}`;
+    if (dragStart) {
+      dragCur = { col, row };
+      render();
+    }
+  });
+  canvas.addEventListener("mousedown", (e) => {
+    const { col, row } = pos(e);
+    dragStart = { col, row };
+    dragCur = { col, row };
+  });
+  canvas.addEventListener("mouseup", (e) => {
+    if (!dragStart) return;
+    const { col, row, cw, ch } = pos(e);
+    const cMin = Math.min(dragStart.col, col), cMax = Math.max(dragStart.col, col);
+    const rMin = Math.min(dragStart.row, row), rMax = Math.max(dragStart.row, row);
+    const sw = (cMax - cMin + 1) * cw;
+    const sh = (rMax - rMin + 1) * ch;
+    const sx = cMin * cw, sy = rMin * ch;
+    const pick = { name: nameIn.value || "pick", sheet: sheet.key, sx, sy, sw, sh };
+    picks.push(pick);
+    pickedEl.textContent = `sx=${sx}, sy=${sy}, sw=${sw}, sh=${sh}`;
+    const snippet = formatPick(pick);
+    navigator.clipboard?.writeText(snippet).then(() => {
+      copiedEl.textContent = "  📋 copied";
+      setTimeout(() => copiedEl.textContent = "", 1400);
+    });
+    renderList();
+    dragStart = null;
+    dragCur = null;
+    render();
+  });
+
+  function pos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const cw = +cellWIn.value || 16;
+    const ch = +cellHIn.value || 16;
+    const zoom = +zoomIn.value || 4;
+    const x = (e.clientX - rect.left) / zoom;
+    const y = (e.clientY - rect.top) / zoom;
+    return { col: Math.floor(x / cw), row: Math.floor(y / ch), cw, ch, zoom };
+  }
+
+  function renderList() {
+    if (picks.length === 0) {
+      listEl.textContent = "// click a cell, or drag to box-select multiple cells";
+      return;
+    }
+    listEl.innerHTML = picks.map(formatPick).join("\n");
+  }
+
+  function formatPick(p) {
+    return `<span class="name">${escapeHtml(p.name)}</span>: { sheet: "${p.sheet}", sx: <span class="num">${p.sx}</span>, sy: <span class="num">${p.sy}</span>, sw: <span class="num">${p.sw}</span>, sh: <span class="num">${p.sh}</span> },`;
+  }
+  function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"})[c]); }
+
+  function render() {
+    if (!img.complete || img.naturalWidth === 0) return;
+    const zoom = +zoomIn.value || 4;
+    const cw = +cellWIn.value || 16;
+    const ch = +cellHIn.value || 16;
+    canvas.width = img.naturalWidth * zoom;
+    canvas.height = img.naturalHeight * zoom;
+    ctx.imageSmoothingEnabled = false;
+    // checker bg so transparent sprites are visible
+    const tile = 8 * zoom;
+    for (let y = 0; y < canvas.height; y += tile) {
+      for (let x = 0; x < canvas.width; x += tile) {
+        ctx.fillStyle = ((x/tile + y/tile) & 1) ? "#1a1f29" : "#0e1116";
+        ctx.fillRect(x, y, tile, tile);
+      }
+    }
+    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, 0, 0, canvas.width, canvas.height);
+    // grid
+    ctx.strokeStyle = "rgba(255,255,255,0.12)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= img.naturalWidth; x += cw) {
+      ctx.beginPath(); ctx.moveTo(x * zoom + 0.5, 0); ctx.lineTo(x * zoom + 0.5, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y <= img.naturalHeight; y += ch) {
+      ctx.beginPath(); ctx.moveTo(0, y * zoom + 0.5); ctx.lineTo(canvas.width, y * zoom + 0.5); ctx.stroke();
+    }
+    // saved picks (yellow outlines)
+    for (const p of picks) {
+      ctx.strokeStyle = "rgba(245, 194, 101, 0.95)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(p.sx * zoom + 1, p.sy * zoom + 1, p.sw * zoom - 2, p.sh * zoom - 2);
+      ctx.fillStyle = "rgba(245, 194, 101, 0.18)";
+      ctx.fillRect(p.sx * zoom + 1, p.sy * zoom + 1, p.sw * zoom - 2, p.sh * zoom - 2);
+    }
+    // active drag (cyan outline)
+    if (dragStart && dragCur) {
+      const cMin = Math.min(dragStart.col, dragCur.col), cMax = Math.max(dragStart.col, dragCur.col);
+      const rMin = Math.min(dragStart.row, dragCur.row), rMax = Math.max(dragStart.row, dragCur.row);
+      ctx.strokeStyle = "rgba(90, 200, 250, 0.95)";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(cMin * cw * zoom + 1, rMin * ch * zoom + 1,
+        (cMax - cMin + 1) * cw * zoom - 2, (rMax - rMin + 1) * ch * zoom - 2);
+    }
+  }
+}
+</script>
+</body>
+</html>

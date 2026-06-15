@@ -2,18 +2,20 @@
  *  pixel rects on the shared sheets in `web/public/sprites/`.
  *
  *  Sheets (synced from `app/src/main/assets/` via `scripts/sync-assets.mjs`):
- *  - `room-builder-tile.png` (272×368, 16×16 cells): floors + wall pieces.
- *  - `interior-tile.png` (256×1424, 16×16 cells): furniture, decor.
- *  - `16x16-walk-sheet.png` (144×120, 24×24 cells): 6×5 grid of 30
- *    character designs (all facing roughly south; no walk animation in
- *    first pass — pick one per identity hash for variety).
+ *  - `room-builder-tile.png` (272×368, 16×16 cells): walls on the left,
+ *    floor pattern swatches on the right (cols 12–13).
+ *  - `interior-tile.png` (256×1424): freeform furniture/decor props
+ *    (NOT a strict 16×16 grid — each item must be box-selected).
+ *  - `16x16-walk-sheet.png` (144×120, 24×24 cells): a 6×5 grid of 30
+ *    static character designs. Most face south; this sheet does NOT
+ *    contain a 4-directional walk cycle. For real left/right/up/down
+ *    walking, swap in a sheet that ships per-direction frames (e.g.
+ *    Sprout Lands characters on itch.io). Current behavior: each
+ *    identity gets a stable cell via `charCellForIdentity()` and the
+ *    character is drawn statically.
  *
- *  To add a furniture sprite:
- *  1. Open `web/public/sprites/interior-tile.png` at 100% zoom.
- *  2. Count cells from top-left (each cell = 16 px). A 1×2 chair sitting in
- *     column 3, row 4 has `sx = 3*16 = 48`, `sy = 4*16 = 64`, `sw = 16`,
- *     `sh = 32`.
- *  3. Add an entry under FURNITURE below with the chosen MapObjectType. */
+ *  Tile picker: open `/tile-picker.html` while `npm run dev` is up to
+ *  click cells and copy ready-to-paste SpriteRect entries. */
 import type { MapObjectType } from "../types/mapConfig";
 
 export interface SpriteRect {
@@ -33,13 +35,17 @@ export const SHEET_URLS: Record<SpriteSheetKey, string> = {
 };
 
 /** Tile used to repeat-fill the floor. Pick any 16×16 cell from
- *  `room-builder-tile.png`. The chosen cell should be seamlessly tileable
- *  (most floor cells in that sheet are). */
+ *  `room-builder-tile.png`. Floor pattern swatches live on the right side
+ *  of the sheet (cols 12–13, x=192–223), each as a 32×32 block:
+ *  - (192,  80) red brick
+ *  - (192, 112) yellow checker  ← current default (warm, Gather-like)
+ *  - (192, 144) cyan diamond
+ *  - (192, 176) light gray plain
+ *  - (192, 208) red chevron
+ *  Any 16×16 sub-cell of those blocks should tile seamlessly. */
 export const FLOOR_TILE: SpriteRect = {
   sheet: "rooms",
-  // First wood-plank floor tile, ~6 cells down on the left edge. Adjust if
-  // a different floor reads better in the room.
-  sx: 0, sy: 96, sw: 16, sh: 16,
+  sx: 192, sy: 112, sw: 16, sh: 16,
 };
 
 /** Character sheet geometry. 144 / 6 = 24 wide, 120 / 5 = 24 tall. */
