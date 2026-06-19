@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  PALETTE,
   getMapChoices,
   isValidNickname,
   isValidRoom,
@@ -288,23 +287,6 @@ export function JoinScreen({ onConnected, onOpenEditor }: JoinScreenProps) {
             ))}
           </select>
         </label>
-
-        <fieldset className="color-fieldset">
-          <legend>Color</legend>
-          <div className="swatches">
-            {PALETTE.map((c) => (
-              <button
-                key={c}
-                type="button"
-                className={`swatch${c === joinDraft.color ? " selected" : ""}`}
-                style={{ background: c }}
-                aria-label={`pick ${c}`}
-                aria-pressed={c === joinDraft.color}
-                onClick={() => setJoinDraft({ color: c })}
-              />
-            ))}
-          </div>
-        </fieldset>
 
         <fieldset className="char-fieldset">
           <legend>Character (#{String(joinDraft.characterIndex).padStart(2, "0")})</legend>
