@@ -214,6 +214,47 @@ select {
   border-color: #fff;
 }
 
+/* Character picker: 10×5 grid of 32×32 pixel-art tiles. Sprites are
+ * 16×16 PNGs scaled 2× via background-size with NN scaling so they stay
+ * crisp at any zoom. */
+.join-card .char-fieldset {
+  border: 1px solid #2a323d;
+  border-radius: 6px;
+  padding: 8px 10px 10px;
+}
+
+.join-card .char-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 32px);
+  gap: 4px;
+  max-height: 184px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.join-card .char-tile {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background-color: #1f2730;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 32px 32px;
+  image-rendering: pixelated;
+  cursor: pointer;
+}
+
+.join-card .char-tile:hover {
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.join-card .char-tile.selected {
+  border-color: #2f80ed;
+  box-shadow: 0 0 0 2px rgba(47, 128, 237, 0.35);
+}
+
 .join-card .primary {
   background: #2f80ed;
   color: #fff;

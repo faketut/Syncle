@@ -110,19 +110,24 @@ export async function setStatusAttribute(
   await room.localParticipant.setAttributes({ status });
 }
 
-/** Publish profile attributes once on join. Same keys as Android's
- *  `SyncleViewModel.ATTR_COLOR`/`ATTR_NICKNAME` so Android peers see the
- *  web user's nickname + color instead of falling back to the LiveKit
- *  identity and a default sprite color. */
+/** Publish profile attributes once on join. `nickname`/`color` match the
+ *  Android contract (`SyncleViewModel.ATTR_COLOR`/`ATTR_NICKNAME`).
+ *  `character` is a web-only addition: a 1..50 sprite index string that
+ *  peers parse to render the user's chosen avatar. Android peers ignore
+ *  unknown attributes. */
 export async function publishProfileAttributes(
   room: Room,
-  profile: { nickname: string; color: string },
+  profile: { nickname: string; color: string; characterIndex?: number },
 ): Promise<void> {
   try {
-    await room.localParticipant.setAttributes({
+    const attrs: Record<string, string> = {
       nickname: profile.nickname,
       color: profile.color,
-    });
+    };
+    if (typeof profile.characterIndex === "number") {
+      attrs.character = String(profile.characterIndex);
+    }
+    await room.localParticipant.setAttributes(attrs);
   } catch (err) {
     console.warn("publishProfileAttributes failed", err);
   }

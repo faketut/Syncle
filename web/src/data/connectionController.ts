@@ -18,6 +18,9 @@ export interface ConnectCache {
   room: string;
   nickname: string;
   color: string;
+  /** 1..50 sprite index the user picked on the join screen. Re-published
+   *  on every reconnect so peers don't lose the avatar mid-session. */
+  characterIndex?: number;
   /** Current session token. Refreshed when the backend returns 401 or when
    *  the cached `expiresAt` is within 60s of now. */
   session: SessionResponse;
@@ -174,6 +177,7 @@ export function startConnectionController(
     void publishProfileAttributes(room, {
       nickname: deps.cache.nickname,
       color: deps.cache.color,
+      characterIndex: deps.cache.characterIndex,
     });
     return room;
   }

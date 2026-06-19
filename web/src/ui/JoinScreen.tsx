@@ -5,6 +5,8 @@ import {
   isValidNickname,
   isValidRoom,
   useSyncle,
+  CHARACTER_COUNT,
+  persistCharacterIndex,
 } from "../state/syncleStore";
 import { createSession, getOrCreateDeviceId, listChannels } from "../data/sessionApi";
 import { loadMapConfig } from "../domain/mapConfig";
@@ -75,6 +77,7 @@ export function JoinScreen({ onConnected, onOpenEditor }: JoinScreenProps) {
         tableId: null,
         status: "available",
         manualBusy: false,
+        characterIndex: joinDraft.characterIndex,
       });
 
       resetSeq();
@@ -160,10 +163,18 @@ export function JoinScreen({ onConnected, onOpenEditor }: JoinScreenProps) {
           // Empty strings mean "not set" — preserve existing value.
           const nick = attrs.nickname;
           const color = attrs.color;
-          if ((nick && nick.length > 0) || (color && color.length > 0)) {
+          const charRaw = attrs.character;
+          const charIdx = charRaw ? Number.parseInt(charRaw, 10) : NaN;
+          const charValid = Number.isInteger(charIdx) && charIdx >= 1 && charIdx <= 50;
+          if (
+            (nick && nick.length > 0) ||
+            (color && color.length > 0) ||
+            charValid
+          ) {
             setPeerProfile(identity, {
               name: nick && nick.length > 0 ? nick : undefined,
               color: color && color.length > 0 ? color : undefined,
+              characterIndex: charValid ? charIdx : undefined,
             });
           }
           // Presence status (web-only for now).
@@ -190,10 +201,12 @@ export function JoinScreen({ onConnected, onOpenEditor }: JoinScreenProps) {
       );
 
       // Publish our own profile so Android peers see our nickname/color
-      // instead of falling back to the LiveKit identity.
+      // instead of falling back to the LiveKit identity. `character` is a
+      // web-only addition the picker sets; Android ignores unknown attrs.
       void publishProfileAttributes(room, {
         nickname: session.nickname,
         color: session.color,
+        characterIndex: joinDraft.characterIndex,
       });
 
       const cache: ConnectCache = {
@@ -202,6 +215,7 @@ export function JoinScreen({ onConnected, onOpenEditor }: JoinScreenProps) {
         room: joinDraft.room,
         nickname: session.nickname,
         color: session.color,
+        characterIndex: joinDraft.characterIndex,
         session,
         events,
       };
@@ -289,6 +303,33 @@ export function JoinScreen({ onConnected, onOpenEditor }: JoinScreenProps) {
                 onClick={() => setJoinDraft({ color: c })}
               />
             ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="char-fieldset">
+          <legend>Character (#{String(joinDraft.characterIndex).padStart(2, "0")})</legend>
+          <div className="char-grid">
+            {Array.from({ length: CHARACTER_COUNT }, (_, i) => i + 1).map((n) => {
+              const padded = String(n).padStart(2, "0");
+              const selected = n === joinDraft.characterIndex;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  className={`char-tile${selected ? " selected" : ""}`}
+                  aria-label={`Character ${padded}`}
+                  aria-pressed={selected}
+                  title={`#${padded}`}
+                  onClick={() => {
+                    setJoinDraft({ characterIndex: n });
+                    persistCharacterIndex(n);
+                  }}
+                  style={{
+                    backgroundImage: `url(/sprites/chars/char_${padded}.png)`,
+                  }}
+                />
+              );
+            })}
           </div>
         </fieldset>
 

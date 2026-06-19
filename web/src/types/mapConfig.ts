@@ -47,6 +47,11 @@ export interface RawMapObject extends RawRect {
    *  objects as fake-3D boxes (top + side faces). Defaults per type when
    *  omitted; set explicitly to override (0 = flat, no extrusion). */
   elevation?: number;
+  /** Named sprite key from `ui/spriteAtlas.ts` SPRITES catalog. When set,
+   *  the renderer draws this sprite cell instead of the per-type default
+   *  (FURNITURE[type]). Lets authors pick `bed_blue` / `bookshelf` /
+   *  `stove` etc. without adding a new MapObjectType for each. */
+  sprite?: string;
 }
 
 export interface RawMapConfig {
@@ -118,6 +123,8 @@ export interface MapObject extends Rect {
   repo?: string;
   /** Visual extrusion elevation in world units. Defaults per type. */
   elevation?: number;
+  /** Named sprite key from `ui/spriteAtlas.ts` SPRITES. See RawMapObject.sprite. */
+  sprite?: string;
 }
 
 export interface MapConfig {

@@ -7,8 +7,9 @@ import { statusMeta, type AvatarStatus } from "../domain/avatarStatus";
 import {
   SHEET_URLS,
   FLOOR_TILE,
-  FURNITURE,
+  resolveSprite,
   charUrlForIdentity,
+  charUrlFromIndex,
   type SpriteSheetKey,
 } from "./spriteAtlas";
 
@@ -243,6 +244,7 @@ export function SpatialCanvas({
           peer.nowPlaying ?? null,
           charCache,
           peer.identity,
+          peer.characterIndex,
         );
       }
 
@@ -262,6 +264,7 @@ export function SpatialCanvas({
         self.nowPlaying ?? null,
         charCache,
         self.userId,
+        self.characterIndex,
       );
 
       frame = requestAnimationFrame(draw);
@@ -365,10 +368,11 @@ function drawObjects(
       const isHighlighted =
         (obj.type === "table" && obj.id != null && obj.id === highlightTable) ||
         (obj.type === "note" && i === highlightNoteIndex);
-      // If a pixel-art sprite is mapped for this type AND the sheet is
-      // loaded, draw the sprite. Otherwise fall through to the procedural
-      // fake-3D renderer in mapDraw.ts.
-      const rect = FURNITURE[obj.type];
+      // Per-object sprite resolution: explicit `obj.sprite` wins over the
+      // per-type FURNITURE default. If a sprite is mapped AND its sheet is
+      // loaded, draw it; otherwise fall through to the procedural fake-3D
+      // renderer in mapDraw.ts.
+      const rect = resolveSprite(obj.type, obj.sprite);
       const sheet = rect ? sheets[rect.sheet] : null;
       if (rect && sheet && sheet.complete && sheet.naturalWidth > 0) {
         drawSpriteObject(ctx, obj, x, y, w, h, count, isHighlighted, rect, sheet);
@@ -382,7 +386,11 @@ function drawObjects(
 /** Draw a furniture object as a pixel-art sprite scaled into its rect.
  *  Footprint shadow + label + highlight ring are preserved so the
  *  behavior matches the procedural path (occupancy ring on tables,
- *  pulse on highlighted tables, label text). */
+ *  pulse on highlighted tables, label text).
+ *
+ *  Special case: `rug` objects TILE the sprite cell instead of stretching
+ *  it. A 320×240 carpet rect with a 16×16 source cell should repeat the
+ *  cell ~20×15 times — stretching would produce one giant blurry pixel. */
 function drawSpriteObject(
   ctx: CanvasRenderingContext2D,
   obj: MapObject,
@@ -396,12 +404,34 @@ function drawSpriteObject(
   sheet: HTMLImageElement,
 ) {
   ctx.save();
-  // Drop shadow so the sprite lifts off the floor.
-  ctx.fillStyle = "rgba(0,0,0,0.30)";
-  ctx.fillRect(x + 2, y + 4, w, h);
-  // Sprite scaled to the object's rect, nearest-neighbor.
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(sheet, rect.sx, rect.sy, rect.sw, rect.sh, x, y, w, h);
+  if (obj.type === "rug") {
+    // Tile via an offscreen 1-cell canvas → CanvasPattern. No drop shadow
+    // (rugs sit on the floor; a shadow would imply elevation).
+    const tilePx = Math.max(1, Math.round(rect.sw));
+    const off = document.createElement("canvas");
+    off.width = tilePx;
+    off.height = tilePx;
+    const octx = off.getContext("2d");
+    if (octx) {
+      octx.imageSmoothingEnabled = false;
+      octx.drawImage(sheet, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, tilePx, tilePx);
+      const pat = ctx.createPattern(off, "repeat");
+      if (pat) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.fillStyle = pat;
+        ctx.fillRect(0, 0, w, h);
+        ctx.restore();
+      }
+    }
+  } else {
+    // Drop shadow so the sprite lifts off the floor.
+    ctx.fillStyle = "rgba(0,0,0,0.30)";
+    ctx.fillRect(x + 2, y + 4, w, h);
+    // Sprite scaled to the object's rect, nearest-neighbor.
+    ctx.drawImage(sheet, rect.sx, rect.sy, rect.sw, rect.sh, x, y, w, h);
+  }
   // Highlights stack the same way as the procedural table path.
   if (isHighlighted) {
     const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 250);
@@ -428,15 +458,20 @@ function drawSpriteObject(
 }
 
 /** Lazy character image loader. Returns the cached HTMLImageElement for
- *  an identity, kicking off a fetch on first call. Returns null when no
- *  cache is available; the caller falls back to the colored disc until
- *  `.complete && .naturalWidth > 0` flips true on a later frame. */
+ *  an identity, kicking off a fetch on first call. When `characterIndex`
+ *  is provided (peer/self picked a sprite), it overrides the
+ *  identity-hash fallback so old clients still get a stable sprite while
+ *  picker-aware clients use the explicit choice. */
 function getOrLoadChar(
   cache: Map<string, HTMLImageElement> | null,
   identity: string,
+  characterIndex?: number,
 ): HTMLImageElement | null {
   if (!cache) return null;
-  const url = charUrlForIdentity(identity);
+  const url =
+    typeof characterIndex === "number"
+      ? charUrlFromIndex(characterIndex)
+      : charUrlForIdentity(identity);
   let img = cache.get(url) ?? null;
   if (!img) {
     img = new Image();
@@ -460,6 +495,7 @@ function drawAvatar(
   nowPlaying: string | null = null,
   charCache: Map<string, HTMLImageElement> | null = null,
   identity: string = "",
+  characterIndex: number | undefined = undefined,
 ) {
   ctx.save();
   // Presence status ring: thin colored ring tight to the avatar. Drawn
@@ -492,8 +528,12 @@ function drawAvatar(
     ctx.stroke();
   }
   // Avatar body: pixel-art character sprite if cached; load on first
-  // request, fall back to the colored disc until it arrives.
-  const charImg = identity ? getOrLoadChar(charCache, identity) : null;
+  // request, fall back to the colored disc until it arrives. Picker-aware
+  // peers publish `characterIndex` and get the explicit sprite; older
+  // peers fall back to the identity-hash sprite.
+  const charImg = identity
+    ? getOrLoadChar(charCache, identity, characterIndex)
+    : null;
   if (charImg && charImg.complete && charImg.naturalWidth > 0) {
     // Pixel chars are 16×16; draw 2.4× the legacy disc radius tall to
     // keep similar visual weight, then anchor so the feet sit near +r.

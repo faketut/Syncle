@@ -66,6 +66,10 @@ export interface RemotePeer {
   status: AvatarStatus;
   /** Optional `now_playing` LiveKit attribute. Empty string => clear. */
   nowPlaying?: string;
+  /** Character sprite index in [1, CHARACTER_COUNT]. Published as the
+   *  `character` LiveKit attribute (web-only). When missing, renderer falls
+   *  back to a stable hash of the identity so old clients still get a sprite. */
+  characterIndex?: number;
 }
 
 export interface LocalSelf {
@@ -85,6 +89,10 @@ export interface LocalSelf {
   manualBusy: boolean;
   /** Optional "now playing" string (M7). Empty/undefined => not set. */
   nowPlaying?: string;
+  /** Character sprite index in [1, CHARACTER_COUNT], chosen on the join
+   *  screen and persisted to localStorage under `syncle.charIndex`.
+   *  Broadcast as the `character` LiveKit attribute. */
+  characterIndex?: number;
 }
 
 export interface JoinDraft {
@@ -92,6 +100,9 @@ export interface JoinDraft {
   color: string;
   room: string;
   mapUrl: string;
+  /** 1..50 character picker selection. Persisted to localStorage
+   *  `syncle.charIndex` so the next visit pre-selects it. */
+  characterIndex: number;
 }
 
 export interface MapChoice {
@@ -171,7 +182,7 @@ interface SyncleState {
   setPeerTable: (identity: string, tableId: string | null) => void;
   setPeerProfile: (
     identity: string,
-    patch: { name?: string; color?: string },
+    patch: { name?: string; color?: string; characterIndex?: number },
   ) => void;
   setPeerStatus: (identity: string, status: AvatarStatus) => void;
   removePeer: (identity: string) => void;
@@ -224,6 +235,7 @@ const DEFAULT_DRAFT: JoinDraft = {
   color: "#4F8EF7",
   room: "syncle-office",
   mapUrl: DEFAULT_MAP.url,
+  characterIndex: defaultCharacterIndex(),
 };
 
 function defaultNickname(): string {
@@ -233,6 +245,41 @@ function defaultNickname(): string {
     s += alphabet[Math.floor(Math.random() * alphabet.length)];
   }
   return `Syncle-${s}`;
+}
+
+/** Total number of character sprites in `web/public/sprites/chars/`. Kept
+ *  in sync with spriteAtlas.ts CHAR_COUNT. */
+export const CHARACTER_COUNT = 50;
+const CHAR_INDEX_STORAGE_KEY = "syncle.charIndex";
+
+/** Read the persisted picker selection, or pick a random sprite so first-
+ *  time visitors don't all look identical. Touches localStorage directly
+ *  (DEFAULT_DRAFT is evaluated before `safeStorage` is initialized; and
+ *  CHARACTER_COUNT is in TDZ at module init, hence the magic 50). */
+function defaultCharacterIndex(): number {
+  const COUNT = 50;
+  try {
+    const raw =
+      typeof localStorage === "undefined"
+        ? null
+        : localStorage.getItem(CHAR_INDEX_STORAGE_KEY);
+    const n = raw == null ? NaN : Number.parseInt(raw, 10);
+    if (Number.isInteger(n) && n >= 1 && n <= COUNT) return n;
+  } catch {
+    /* fall through to random */
+  }
+  return 1 + Math.floor(Math.random() * COUNT);
+}
+
+/** Persist the user's chosen character index. Safe in SSR/tests. */
+export function persistCharacterIndex(n: number): void {
+  try {
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(CHAR_INDEX_STORAGE_KEY, String(n));
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 /** Browser-or-test-safe wrapper around `localStorage`. SSR builds and Node
@@ -351,7 +398,8 @@ export const useSyncle = create<SyncleState>((set) => ({
       const merged = { ...existing, ...patch };
       if (
         existing.name === merged.name &&
-        existing.color === merged.color
+        existing.color === merged.color &&
+        existing.characterIndex === merged.characterIndex
       ) {
         return {};
       }

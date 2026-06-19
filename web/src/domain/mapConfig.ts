@@ -47,6 +47,7 @@ export async function loadMapConfig(url = "/map_config.json"): Promise<MapConfig
     destination: o.destination,
     repo: o.repo,
     elevation: o.elevation,
+    sprite: o.sprite,
     x: o.x,
     y: o.y,
     width: o.width,
